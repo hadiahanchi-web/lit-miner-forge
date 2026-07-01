@@ -1,5 +1,11 @@
 import type { LucideIcon } from "lucide-react";
 import { Usb, Cpu, HardDrive, Microchip, Atom, Flame } from "lucide-react";
+import usbImg from "@/assets/miners/usb.png";
+import starterImg from "@/assets/miners/starter.png";
+import gpuImg from "@/assets/miners/gpu.png";
+import asicImg from "@/assets/miners/asic.png";
+import quantumImg from "@/assets/miners/quantum.png";
+import fusionImg from "@/assets/miners/fusion.png";
 
 export interface MinerType {
   id: number;
