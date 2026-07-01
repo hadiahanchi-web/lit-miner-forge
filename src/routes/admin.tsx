@@ -24,6 +24,7 @@ import {
 import { MINING_MANAGER_ABI, MINING_MANAGER_ADDRESS } from "@/lib/contract";
 import { CONTRACT_DEPLOYED, useBlockRefetch, usePoolInfo } from "@/lib/onchain";
 import { fmtBig } from "@/lib/bigformat";
+import { MOBILE_NAV_VARIANTS, useMobileNavVariant } from "@/lib/mobile-nav";
 
 const contract = { address: MINING_MANAGER_ADDRESS, abi: MINING_MANAGER_ABI } as const;
 
@@ -130,6 +131,7 @@ export default function Admin() {
         <CircuitBreakers miningPaused={miningPaused} withdrawPaused={withdrawPaused} />
         <FundPool />
         <EmissionCard current={emissionBps} />
+        <MobileNavCard />
         {isOwner && <AdminManagement />}
         {isOwner && <TreasuryWithdraw treasury={treasury} />}
       </div>
@@ -511,6 +513,45 @@ function StatCard({
         }`}
       >
         {value}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Mobile Nav Selector ----------
+function MobileNavCard() {
+  const [variant, setVariant] = useMobileNavVariant();
+  return (
+    <div className="glass rounded-2xl p-5">
+      <h2 className="font-display text-sm font-semibold">Mobile navigation style</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        استایل ناوبار موبایل را برای همه کاربران انتخاب کنید. تغییر بلافاصله اعمال می‌شود.
+      </p>
+      <div className="mt-3 space-y-2">
+        {MOBILE_NAV_VARIANTS.map((v) => {
+          const active = variant === v.id;
+          return (
+            <button
+              key={v.id}
+              onClick={() => setVariant(v.id)}
+              className={`flex w-full items-start justify-between gap-3 rounded-xl border px-4 py-3 text-left text-sm transition ${
+                active
+                  ? "border-sky-500/50 bg-sky-500/10 neon-blue"
+                  : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+              }`}
+            >
+              <div>
+                <div className="font-semibold">{v.label}</div>
+                <div className="mt-0.5 text-[11px] opacity-80">{v.description}</div>
+              </div>
+              <span
+                className={`mt-1 h-3 w-3 shrink-0 rounded-full border ${
+                  active ? "border-sky-400 bg-sky-400" : "border-white/30"
+                }`}
+              />
+            </button>
+          );
+        })}
       </div>
     </div>
   );
