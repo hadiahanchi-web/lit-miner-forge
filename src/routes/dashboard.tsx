@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { useDocMeta } from "@/lib/head";
 import { useAccount, useBalance, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -26,17 +26,8 @@ import { fmtBig, bigMin } from "@/lib/bigformat";
 import { shortAddr } from "@/lib/format";
 import { MINERS } from "@/lib/miners";
 
-export const Route = createFileRoute("/dashboard")({
-  head: () => ({
-    meta: [
-      { title: "Dashboard — LiteMiner" },
-      { name: "description", content: "Live on-chain mining stats and claim rewards." },
-    ],
-  }),
-  component: DashboardPage,
-});
-
-function DashboardPage() {
+export default function DashboardPage() {
+  useDocMeta("Dashboard — LiteMiner", "Live on-chain mining stats and claim rewards.");
   useBlockRefetch();
   const { address, isConnected } = useAccount();
   const { data: bal } = useBalance({ address, query: { refetchInterval: 5000 } });

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { useDocMeta } from "@/lib/head";
 import { useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 import { Trophy, Loader2 } from "lucide-react";
@@ -6,20 +6,6 @@ import { Trophy, Loader2 } from "lucide-react";
 import { useBlockRefetch, useLeaderboard, CONTRACT_DEPLOYED } from "@/lib/onchain";
 import { fmtBig } from "@/lib/bigformat";
 import { shortAddr } from "@/lib/format";
-
-export const Route = createFileRoute("/leaderboard")({
-  head: () => ({
-    meta: [
-      { title: "Leaderboard — LiteMiner" },
-      {
-        name: "description",
-        content:
-          "Top zkLTC miners on the LitVM LiteForge testnet — ranked live from the MiningManager contract.",
-      },
-    ],
-  }),
-  component: Leaderboard,
-});
 
 type SortKey = "lifetimeRewards" | "totalInvested" | "ratePerSecond" | "minerCount";
 const SORT_LABEL: Record<SortKey, string> = {
@@ -29,7 +15,11 @@ const SORT_LABEL: Record<SortKey, string> = {
   minerCount: "Miner count",
 };
 
-function Leaderboard() {
+export default function Leaderboard() {
+  useDocMeta(
+    "Leaderboard — LiteMiner",
+    "Top zkLTC miners on the LitVM LiteForge testnet — ranked live from the MiningManager contract.",
+  );
   useBlockRefetch();
   const { address } = useAccount();
   const { rows, isLoading, playersCount } = useLeaderboard();

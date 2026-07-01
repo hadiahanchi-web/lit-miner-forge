@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { useDocMeta } from "@/lib/head";
 import { useEffect, useState } from "react";
 import {
   useAccount,
@@ -25,20 +25,6 @@ import { MINING_MANAGER_ABI, MINING_MANAGER_ADDRESS } from "@/lib/contract";
 import { CONTRACT_DEPLOYED, useBlockRefetch, usePoolInfo } from "@/lib/onchain";
 import { fmtBig } from "@/lib/bigformat";
 
-export const Route = createFileRoute("/admin")({
-  head: () => ({
-    meta: [
-      { title: "Admin — LiteMiner" },
-      {
-        name: "description",
-        content:
-          "On-chain owner controls for the LiteMiner MiningManager contract on LitVM LiteForge testnet.",
-      },
-    ],
-  }),
-  component: Admin,
-});
-
 const contract = { address: MINING_MANAGER_ADDRESS, abi: MINING_MANAGER_ABI } as const;
 
 function useIsAuthorizedAdmin(address?: `0x${string}`) {
@@ -58,7 +44,11 @@ function useIsAuthorizedAdmin(address?: `0x${string}`) {
   return { isAuthorized: isOwner || isAdmin, isOwner, owner, isLoading };
 }
 
-function Admin() {
+export default function Admin() {
+  useDocMeta(
+    "Admin — LiteMiner",
+    "On-chain owner controls for the LiteMiner MiningManager contract on LitVM LiteForge testnet.",
+  );
   useBlockRefetch();
   const { address } = useAccount();
   const { isAuthorized, isOwner, owner, isLoading } = useIsAuthorizedAdmin(address);

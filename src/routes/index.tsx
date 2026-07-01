@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
+import { useDocMeta } from "@/lib/head";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useBalance } from "wagmi";
 import { Suspense, lazy, useEffect, useState } from "react";
@@ -28,21 +29,11 @@ const MiningScene = lazy(() =>
   import("@/components/MiningScene").then((m) => ({ default: m.MiningScene })),
 );
 
-export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "LiteMiner — on-chain zkLTC mining on LitVM LiteForge" },
-      {
-        name: "description",
-        content:
-          "Buy on-chain miner NFTs with zkLTC and earn continuous rewards from the MiningManager contract on LitVM LiteForge testnet.",
-      },
-    ],
-  }),
-  component: Index,
-});
-
-function Index() {
+export default function Index() {
+  useDocMeta(
+    "LiteMiner — on-chain zkLTC mining on LitVM LiteForge",
+    "Buy on-chain miner NFTs with zkLTC and earn continuous rewards from the MiningManager contract on LitVM LiteForge testnet.",
+  );
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   useBlockRefetch();
