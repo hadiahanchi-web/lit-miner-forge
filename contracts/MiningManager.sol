@@ -119,22 +119,6 @@ contract MiningManager {
         p.lastUpdate = block.timestamp;
     }
 
-    // ---------- BUY ----------
-    function buyMiner(uint256 id) external payable nonReentrant {
-        require(!miningPaused, "paused");
-        require(id < miners.length, "bad id");
-
-        MinerType memory m = miners[id];
-        require(m.active, "inactive");
-        require(msg.value == m.price, "bad price");
-
-        Player storage p = players[msg.sender];
-
-        if (!p.registered) {
-            p.registered = true;
-            p.lastUpdate = block.timestamp;
-            playerList.push(msg.sender);
-        }
 
     // ---------- PRICING (anti-whale curve) ----------
     /// @notice Dynamic price = basePrice * (1.25 ^ min(globalMinted, CAP)).
