@@ -1,5 +1,5 @@
 // Deploy MiningManager.sol from /contracts, then paste address here.
-export const MINING_MANAGER_ADDRESS = "0xd4Ef9F0Cfe1E676525266c8aECd99D190D5DC0fe" as const;
+export const MINING_MANAGER_ADDRESS = "0x7ff78B825445Bb36BCF71758fF2c36bCD6BEaC84" as const;
 
 export const MINING_MANAGER_ABI = [
   {
