@@ -208,26 +208,34 @@ contract MiningManager {
         }
     }
 
-    // ---------- Dynamic emissions ----------
-    /// @notice Returns the current emission multiplier in bps (0..10000).
-    ///         Health = rewardPool / expectedRewardFunding.
-    ///         >=60% → 100%, 40–60% → 75%, 20–40% → 50%, 10–20% → 25%, else 10% or 0.
-    function emissionBps() public view returns (uint256) {
-        uint256 funded = (totalDeposits * rewardBps) / 10_000;
-        if (funded == 0) return 10_000;
-        uint256 healthBps = (rewardPool * 10_000) / funded;
-        if (rewardPool == 0) return 0;
-        if (healthBps >= 6000) return 10_000;
-        if (healthBps >= 4000) return 7_500;
-        if (healthBps >= 2000) return 5_000;
-        if (healthBps >= 1000) return 2_500;
-        return 1_000;
+    // ---------- Emissions (fixed global model) ----------
+    /// @notice Global emission multiplier in bps applied to every player's
+    ///         nominal ratePerSecond. 10_000 = 100% (1x). No dependency on
+    ///         rewardPool — emissions are fully decoupled from pool liquidity
+    ///         so the accounting ledger (`pending`) cannot drive pool
+    ///         depletion via feedback loops. `rewardPool` only gates
+    ///         *withdrawal* liquidity, never emission.
+    uint256 public emissionRatePerSecondGlobal = 10_000;
+
+    /// @notice Max fraction of rewardPool payable in a single claim tx (bps).
+    ///         Hard safety cap so no single caller can drain the pool.
+    uint256 public constant MAX_CLAIM_POOL_BPS = 2_000; // 20%
+
+    event EmissionUpdated(uint256 emissionRatePerSecondGlobal);
+
+    /// @notice Owner-only knob to tune global emission multiplier.
+    function setEmissionRatePerSecondGlobal(uint256 bps) external onlyOwner {
+        require(bps <= 100_000, "cap 10x");
+        emissionRatePerSecondGlobal = bps;
+        emit EmissionUpdated(bps);
     }
 
     function _accrue(Player storage p) internal {
         uint256 dt = block.timestamp - p.lastUpdate;
         if (dt > 0 && p.ratePerSecond > 0) {
-            uint256 emitted = (dt * p.ratePerSecond * emissionBps()) / 10_000;
+            // Pure: time * userRatePerSecond * emissionRatePerSecondGlobal.
+            // No pool interaction, no dynamic multipliers.
+            uint256 emitted = (dt * p.ratePerSecond * emissionRatePerSecondGlobal) / 10_000;
             p.pending += emitted;
         }
         p.lastUpdate = block.timestamp;
@@ -345,14 +353,28 @@ contract MiningManager {
         _accrue(p);
         require(p.pending >= WITHDRAW_THRESHOLD, "below threshold");
 
-        // Cap gross payout at pool balance; net = gross - maintenance fee to treasury
+    function claimRewards() external nonReentrant {
+        require(!withdrawPaused, "withdraw paused");
+        Player storage p = _players[msg.sender];
+        require(p.registered, "not registered");
+        _accrue(p);
+        require(p.pending >= WITHDRAW_THRESHOLD, "below threshold");
+        require(rewardPool > 0, "pool empty");
+
+        // Payout liquidity = min(pending, pool available, per-tx safety cap).
+        // Pool is the ONLY source of withdrawal liquidity; pending stays as
+        // an internal ledger and never forces the pool negative.
         uint256 gross = p.pending;
-        if (gross > rewardPool) gross = rewardPool;
-        require(gross > 0, "pool empty");
+        uint256 poolCap = (rewardPool * MAX_CLAIM_POOL_BPS) / 10_000;
+        if (poolCap == 0) poolCap = rewardPool; // tiny pools: allow full drain up to balance
+        if (gross > poolCap) gross = poolCap;
+        if (gross > rewardPool) gross = rewardPool; // defensive; must never underflow
+        require(gross > 0, "no liquidity");
 
         uint256 fee = (gross * MAINTENANCE_BPS) / 10_000;
         uint256 net = gross - fee;
 
+        // Ledger updates BEFORE external call (checks-effects-interactions).
         p.pending -= gross;
         p.lifetimeRewards += net;
         p.totalClaims += 1;
@@ -372,7 +394,7 @@ contract MiningManager {
         Player storage p = _players[who];
         if (!p.registered) return 0;
         uint256 dt = block.timestamp - p.lastUpdate;
-        uint256 emitted = (dt * p.ratePerSecond * emissionBps()) / 10_000;
+        uint256 emitted = (dt * p.ratePerSecond * emissionRatePerSecondGlobal) / 10_000;
         return p.pending + emitted;
     }
 
