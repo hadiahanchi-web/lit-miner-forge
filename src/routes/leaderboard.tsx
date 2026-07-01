@@ -7,20 +7,6 @@ import { useBlockRefetch, useLeaderboard, CONTRACT_DEPLOYED } from "@/lib/onchai
 import { fmtBig } from "@/lib/bigformat";
 import { shortAddr } from "@/lib/format";
 
-export const Route = createFileRoute("/leaderboard")({
-  head: () => ({
-    meta: [
-      { title: "Leaderboard — LiteMiner" },
-      {
-        name: "description",
-        content:
-          "Top zkLTC miners on the LitVM LiteForge testnet — ranked live from the MiningManager contract.",
-      },
-    ],
-  }),
-  component: Leaderboard,
-});
-
 type SortKey = "lifetimeRewards" | "totalInvested" | "ratePerSecond" | "minerCount";
 const SORT_LABEL: Record<SortKey, string> = {
   lifetimeRewards: "Lifetime rewards",
@@ -29,7 +15,11 @@ const SORT_LABEL: Record<SortKey, string> = {
   minerCount: "Miner count",
 };
 
-function Leaderboard() {
+export default function Leaderboard() {
+  useDocMeta(
+    "Leaderboard — LiteMiner",
+    "Top zkLTC miners on the LitVM LiteForge testnet — ranked live from the MiningManager contract.",
+  );
   useBlockRefetch();
   const { address } = useAccount();
   const { rows, isLoading, playersCount } = useLeaderboard();
