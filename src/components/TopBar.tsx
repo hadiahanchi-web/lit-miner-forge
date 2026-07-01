@@ -1,6 +1,6 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Link } from "@tanstack/react-router";
-import { Pickaxe, Trophy, ShieldCheck } from "lucide-react";
+import { Pickaxe, Trophy, ShieldCheck, ShoppingBag, Gauge } from "lucide-react";
 import { useAccount, useBalance } from "wagmi";
 import { useMiningState } from "@/lib/mining-state";
 import { fmtZk } from "@/lib/format";
