@@ -23,6 +23,7 @@ import {
 } from "@/lib/onchain";
 import { fmtBig, bigMin } from "@/lib/bigformat";
 import { shortAddr } from "@/lib/format";
+import { MINERS } from "@/lib/miners";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -174,32 +175,38 @@ function DashboardPage() {
             You haven't bought a miner yet. Head to the Shop.
           </p>
         ) : (
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-[10px] uppercase text-muted-foreground">
-                <tr>
-                  <th className="py-1.5">#</th>
-                  <th>Owned</th>
-                  <th>Level</th>
-                  <th className="text-right">Rate/sec</th>
-                </tr>
-              </thead>
-              <tbody className="font-mono">
-                {miners.map((m) => {
-                  const owned = player.minerCounts?.[m.id] ?? 0n;
-                  const lvl = player.minerLevels?.[m.id] ?? 0n;
-                  if (owned === 0n) return null;
-                  return (
-                    <tr key={m.id} className="border-t border-white/5">
-                      <td className="py-1.5">{m.id}</td>
-                      <td>{owned.toString()}</td>
-                      <td>{lvl.toString()}</td>
-                      <td className="text-right">{fmtBig((m.ratePerSecond * owned * emissionBps) / 10000n, 8)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {miners.map((m) => {
+              const owned = player.minerCounts?.[m.id] ?? 0n;
+              const lvl = player.minerLevels?.[m.id] ?? 0n;
+              if (owned === 0n) return null;
+              const meta = MINERS[m.id];
+              const rate = (m.ratePerSecond * owned * emissionBps) / 10000n;
+              return (
+                <div key={m.id} className="flex items-center gap-3 rounded-xl border border-white/5 bg-black/20 p-3">
+                  {meta?.image && (
+                    <img
+                      src={meta.image}
+                      alt={meta?.name ?? `Miner #${m.id}`}
+                      loading="lazy"
+                      width={56}
+                      height={56}
+                      className="h-14 w-14 rounded-lg border border-white/10 bg-black/30 object-contain p-1"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-display text-sm font-semibold">
+                      {meta?.name ?? `Miner #${m.id}`}
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] font-mono text-muted-foreground">
+                      <span>Owned: <span className="text-foreground">{owned.toString()}</span></span>
+                      <span>Lv: <span className="text-foreground">{lvl.toString()}</span></span>
+                      <span>Rate/s: <span className="neon-blue">{fmtBig(rate, 8)}</span></span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

@@ -1,5 +1,11 @@
 import type { LucideIcon } from "lucide-react";
 import { Usb, Cpu, HardDrive, Microchip, Atom, Flame } from "lucide-react";
+import usbImg from "@/assets/miners/usb.png";
+import starterImg from "@/assets/miners/starter.png";
+import gpuImg from "@/assets/miners/gpu.png";
+import asicImg from "@/assets/miners/asic.png";
+import quantumImg from "@/assets/miners/quantum.png";
+import fusionImg from "@/assets/miners/fusion.png";
 
 export interface MinerType {
   id: number;
@@ -11,6 +17,7 @@ export interface MinerType {
   description: string;
   tier: "usb" | "starter" | "gpu" | "asic" | "quantum" | "fusion";
   icon: LucideIcon;
+  image: string;
   symbol: string;
   /** Player-level unlock: previous tier must be owned OR minInvested reached. */
   unlock: { requiresMinerId?: number; minInvested?: number; label: string };
@@ -31,6 +38,7 @@ export const MINERS: MinerType[] = [
     accent: "#64748b",
     tier: "usb",
     icon: Usb,
+    image: usbImg,
     symbol: "USB",
     description: "Onboarding rig. Plug in, learn the ropes, mine your first sats.",
     unlock: { label: "No requirement" },
@@ -46,6 +54,7 @@ export const MINERS: MinerType[] = [
     accent: "#0ea5e9",
     tier: "starter",
     icon: HardDrive,
+    image: starterImg,
     symbol: "S1",
     description: "Reliable entry-level rig. Perfect for your first shaft.",
     unlock: { requiresMinerId: 0, label: "Own a Basic USB Miner" },
@@ -61,6 +70,7 @@ export const MINERS: MinerType[] = [
     accent: "#0891b2",
     tier: "gpu",
     icon: Cpu,
+    image: gpuImg,
     symbol: "GPU",
     description: "Parallelized GPU array. Higher throughput, higher heat.",
     unlock: { requiresMinerId: 1, label: "Own a Starter Miner" },
@@ -76,6 +86,7 @@ export const MINERS: MinerType[] = [
     accent: "#ea580c",
     tier: "asic",
     icon: Microchip,
+    image: asicImg,
     symbol: "ASIC",
     description: "Application-specific silicon tuned for zkLTC hashing.",
     unlock: { requiresMinerId: 2, label: "Own a GPU Miner" },
@@ -91,6 +102,7 @@ export const MINERS: MinerType[] = [
     accent: "#7c3aed",
     tier: "quantum",
     icon: Atom,
+    image: quantumImg,
     symbol: "QTM",
     description: "Superposition-driven proofs. Cold, silent, devastating.",
     unlock: { requiresMinerId: 3, label: "Own an ASIC Miner" },
@@ -106,6 +118,7 @@ export const MINERS: MinerType[] = [
     accent: "#f97316",
     tier: "fusion",
     icon: Flame,
+    image: fusionImg,
     symbol: "FUS",
     description: "Reactor-class rig. The apex of the LiteForge fleet.",
     unlock: { requiresMinerId: 4, label: "Own a Quantum Miner" },

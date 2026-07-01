@@ -15,6 +15,7 @@ import {
   type OnChainMiner,
 } from "@/lib/onchain";
 import { fmtBig } from "@/lib/bigformat";
+import { MINERS } from "@/lib/miners";
 
 export const Route = createFileRoute("/shop")({
   head: () => ({
@@ -161,16 +162,29 @@ function MinerShopCard({
   const ratePerSec = (miner.ratePerSecond * emissionBps) / 10000n;
   const ratePerDay = ratePerSec * 86400n;
 
+  const meta = MINERS[miner.id];
   return (
     <div className="glass relative flex flex-col overflow-hidden rounded-2xl p-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            Tier {miner.id} {miner.active ? "" : "· inactive"}
-          </div>
-          <div className="font-display text-lg font-semibold">
-            <Package className="mr-1.5 inline h-4 w-4 text-sky-400" />
-            Miner #{miner.id}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          {meta?.image && (
+            <img
+              src={meta.image}
+              alt={meta.name}
+              loading="lazy"
+              width={64}
+              height={64}
+              className="h-16 w-16 rounded-xl border border-white/10 bg-black/30 object-contain p-1"
+            />
+          )}
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              Tier {miner.id} {miner.active ? "" : "· inactive"}
+            </div>
+            <div className="font-display text-lg font-semibold">
+              <Package className="mr-1.5 inline h-4 w-4 text-sky-400" />
+              {meta?.name ?? `Miner #${miner.id}`}
+            </div>
           </div>
         </div>
         <div className="rounded-lg border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-mono">
