@@ -194,7 +194,7 @@ function DashboardPage() {
                       <td className="py-1.5">{m.id}</td>
                       <td>{owned.toString()}</td>
                       <td>{lvl.toString()}</td>
-                      <td className="text-right">{fmtBig(m.ratePerSecond * owned, 8)}</td>
+                      <td className="text-right">{fmtBig((m.ratePerSecond * owned * emissionBps) / 10000n, 8)}</td>
                     </tr>
                   );
                 })}
