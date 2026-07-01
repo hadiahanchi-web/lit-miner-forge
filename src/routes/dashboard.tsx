@@ -107,7 +107,7 @@ function DashboardPage() {
         <StatCard icon={<Coins className="h-4 w-4 text-orange-400" />} label="Pending rewards"
           value={`${fmtBig(pending, 6)} zkLTC`} accent="orange" />
         <StatCard icon={<Zap className="h-4 w-4 text-yellow-300" />} label="Rate / sec"
-          value={fmtBig(player?.ratePerSecond ?? 0n, 8)} />
+          value={fmtBig(((player?.ratePerSecond ?? 0n) * emissionBps) / 10000n, 8)} />
         <StatCard icon={<TrendingUp className="h-4 w-4 text-emerald-400" />} label="Lifetime rewards"
           value={`${fmtBig(player?.lifetimeRewards ?? 0n, 4)} zkLTC`} />
       </section>
