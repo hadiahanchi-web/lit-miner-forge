@@ -49,7 +49,11 @@ function Leaderboard() {
         efficiencyPct: r.efficiencyPct,
         avgHwEfficiency: r.avgHwEfficiency,
         uptimeSec: r.uptimeSec,
+        activeDays: r.activeDays,
+        streakDays: r.streakDays,
+        contribution: r.contribution,
       }))
+
       .sort((a, b) => (b[sort] as number) - (a[sort] as number));
   }, [rows, sort]);
 
