@@ -157,7 +157,8 @@ function useContractWrite(label: string) {
     if (isSuccess) toast.success(`${label} confirmed`);
   }, [isSuccess, label]);
 
-  async function send(args: Parameters<typeof writeContractAsync>[0]) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function send(args: any) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const h = await writeContractAsync(args as any);
