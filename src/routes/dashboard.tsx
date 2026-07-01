@@ -16,6 +16,7 @@ import { MINING_MANAGER_ABI, MINING_MANAGER_ADDRESS } from "@/lib/contract";
 import {
   CONTRACT_DEPLOYED,
   useBlockRefetch,
+  useIsAdmin,
   useMiners,
   usePendingRewards,
   usePlayer,
