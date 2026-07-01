@@ -15,6 +15,7 @@ import {
   type OnChainMiner,
 } from "@/lib/onchain";
 import { fmtBig } from "@/lib/bigformat";
+import { MINERS } from "@/lib/miners";
 
 export const Route = createFileRoute("/shop")({
   head: () => ({
