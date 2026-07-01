@@ -16,16 +16,20 @@ export const Route = createFileRoute("/leaderboard")({
   component: Leaderboard,
 });
 
-type SortKey = "efficiencyPct" | "uptimeSec" | "power" | "claimed" | "invested" | "minerCount" | "level";
+type SortKey = "efficiencyPct" | "uptimeSec" | "activeDays" | "streakDays" | "contribution" | "power" | "claimed" | "invested" | "minerCount" | "level";
 const SORT_LABEL: Record<SortKey, string> = {
   efficiencyPct: "Efficiency (ROI %)",
-  uptimeSec: "Mining uptime",
+  uptimeSec: "Uptime",
+  activeDays: "Consistency (days)",
+  streakDays: "Streak",
+  contribution: "Contribution",
   power: "Mining power",
   claimed: "Lifetime rewards",
   invested: "Investment",
   minerCount: "Miner count",
   level: "Player level",
 };
+
 
 function Leaderboard() {
   const rows = useLeaderboard();
