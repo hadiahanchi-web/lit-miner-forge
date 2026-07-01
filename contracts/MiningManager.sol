@@ -292,7 +292,7 @@ contract MiningManager {
 
     // ---------- ADMIN ----------
     function setEmission(uint256 bps) external onlyOwner {
-        require(bps <= 100000, "too high");
+        require(bps >= 1 && bps <= 100000, "invalid bps");
         emissionRatePerSecondGlobal = bps;
     }
 
