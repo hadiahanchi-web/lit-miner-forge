@@ -198,6 +198,9 @@ function emptyPlayer(a: string): PlayerState {
     totalClaims: 0,
     totalRepairs: 0,
     achievements: [],
+    activeDays: 0,
+    streakDays: 0,
+
   };
 }
 
