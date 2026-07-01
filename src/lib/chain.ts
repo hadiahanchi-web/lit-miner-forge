@@ -5,10 +5,10 @@ export const litForge = defineChain({
   name: "LitVM LiteForge Testnet",
   nativeCurrency: { name: "zkLTC", symbol: "zkLTC", decimals: 18 },
   rpcUrls: {
-    default: { http: ["https://rpc.liteforge.network"] },
+    default: { http: ["https://liteforge.rpc.caldera.xyz/http"] },
   },
   blockExplorers: {
-    default: { name: "LiteForge Explorer", url: "https://explorer.liteforge.network" },
+    default: { name: "LiteForge Explorer", url: "https://liteforge.explorer.caldera.xyz" },
   },
   testnet: true,
 });
