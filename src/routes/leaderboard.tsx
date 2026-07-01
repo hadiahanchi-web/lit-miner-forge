@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { useDocMeta } from "@/lib/head";
 import { useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 import { Trophy, Loader2 } from "lucide-react";

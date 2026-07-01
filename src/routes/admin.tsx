@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { useDocMeta } from "@/lib/head";
 import { useEffect, useState } from "react";
 import {
   useAccount,

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { useDocMeta } from "@/lib/head";
 import { useAccount, useBalance, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { toast } from "sonner";
 import { Lock, Loader2, ShoppingBag, Package, Timer, TrendingUp } from "lucide-react";
@@ -17,17 +17,8 @@ import {
 import { fmtBig } from "@/lib/bigformat";
 import { MINERS } from "@/lib/miners";
 
-export const Route = createFileRoute("/shop")({
-  head: () => ({
-    meta: [
-      { title: "Shop — LiteMiner" },
-      { name: "description", content: "Buy on-chain zkLTC miners from LiteMiner MiningManager." },
-    ],
-  }),
-  component: ShopPage,
-});
-
-function ShopPage() {
+export default function ShopPage() {
+  useDocMeta("Shop — LiteMiner", "Buy on-chain zkLTC miners from LiteMiner MiningManager.");
   useBlockRefetch();
   const { address, isConnected } = useAccount();
   const { data: bal } = useBalance({ address, query: { refetchInterval: 5000 } });
