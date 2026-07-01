@@ -32,7 +32,7 @@ function ShopPage() {
   const { data: bal } = useBalance({ address, query: { refetchInterval: 5000 } });
   const { miners, isLoading: minersLoading } = useMiners();
   const { player } = usePlayer();
-  const { miningPaused } = usePoolInfo();
+  const { miningPaused, emissionBps } = usePoolInfo();
   const { lastAction, cooldown } = useCooldown();
 
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
@@ -85,6 +85,7 @@ function ShopPage() {
               ownedCount={player?.minerCounts?.[m.id] ?? 0n}
               player={player}
               miningPaused={miningPaused}
+              emissionBps={emissionBps}
               cooldownRemaining={cooldownRemaining}
             />
           ))}
@@ -101,6 +102,7 @@ function MinerShopCard({
   ownedCount,
   player,
   miningPaused,
+  emissionBps,
   cooldownRemaining,
 }: {
   miner: OnChainMiner;
@@ -109,6 +111,7 @@ function MinerShopCard({
   ownedCount: bigint;
   player: ReturnType<typeof usePlayer>["player"];
   miningPaused: boolean;
+  emissionBps: bigint;
   cooldownRemaining: number;
 }) {
   const { writeContractAsync, isPending } = useWriteContract();
@@ -155,7 +158,8 @@ function MinerShopCard({
     }
   }
 
-  const ratePerDay = miner.ratePerSecond * 86400n;
+  const ratePerSec = (miner.ratePerSecond * emissionBps) / 10000n;
+  const ratePerDay = ratePerSec * 86400n;
 
   return (
     <div className="glass relative flex flex-col overflow-hidden rounded-2xl p-4">
@@ -177,7 +181,7 @@ function MinerShopCard({
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
         <Metric label="Live price" value={`${fmtBig(miner.price, 5)} zkLTC`} highlight />
         <Metric label="Base price" value={`${fmtBig(miner.basePrice, 5)} zkLTC`} />
-        <Metric label="Rate / sec" value={fmtBig(miner.ratePerSecond, 8)} />
+        <Metric label="Rate / sec" value={fmtBig(ratePerSec, 8)} />
         <Metric label="Rate / day" value={fmtBig(ratePerDay, 6)} />
         <Metric label="Global minted" value={miner.totalMintedGlobal.toString()} />
         <Metric
