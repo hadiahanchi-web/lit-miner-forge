@@ -141,12 +141,15 @@ function Leaderboard() {
                     {r.efficiencyPct.toFixed(1)}%
                   </td>
                   <td className="px-4 py-3 text-right font-mono">{(r.uptimeSec / 3600).toFixed(1)}</td>
+                  <td className="px-4 py-3 text-right font-mono neon-blue">{r.activeDays}</td>
+                  <td className="px-4 py-3 text-right font-mono neon-orange">{r.streakDays}🔥</td>
                   <td className="px-4 py-3 text-right font-mono neon-blue">{fmtZk(r.power, 5)}</td>
                   <td className="px-4 py-3 text-right font-mono neon-orange">
                     {fmtZk(r.claimed, 4)}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono">{fmtZk(r.invested, 2)}</td>
+                  <td className="px-4 py-3 text-right font-mono">{fmtZk(r.contribution, 2)}</td>
                   <td className="px-4 py-3 text-right font-mono">{r.referrals}</td>
+
                 </tr>
               );
             })}
