@@ -12,6 +12,9 @@ export function TopBar() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/5 bg-background/60 backdrop-blur-xl">
+      <div className="border-b border-amber-500/20 bg-amber-500/10 px-4 py-1.5 text-center text-[10px] font-medium uppercase tracking-widest text-amber-200">
+        ⚠ Local simulation — Pool, Pending, Leaderboard & Admin figures are stored in your browser only and do not represent real on-chain balances. Only Shop &amp; Dashboard interact with the on-chain contract.
+      </div>
       <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
         <Link to="/" className="flex items-center gap-2">
           <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-sky-400 to-orange-500 shadow-lg shadow-sky-500/30">
@@ -36,9 +39,9 @@ export function TopBar() {
         <div className="ml-auto flex items-center gap-2">
           <div className="hidden items-center gap-2 sm:flex">
             <Stat label="Balance" value={`${fmtZk(bal ? Number(bal.value) / 1e18 : 0, 3)} zkLTC`} />
-            <Stat label="Pending" value={`${fmtZk(livePending, 4)} zkLTC`} accent="orange" />
-            <Stat label="Pool" value={`${fmtZk(pool.rewardPool, 2)}`} />
-            <Stat label="Treasury" value={`${fmtZk(pool.treasury, 2)}`} />
+            <Stat label="Pending (sim)" value={`${fmtZk(livePending, 4)} zkLTC`} accent="orange" />
+            <Stat label="Pool (sim)" value={`${fmtZk(pool.rewardPool, 2)}`} />
+            <Stat label="Treasury (sim)" value={`${fmtZk(pool.treasury, 2)}`} />
           </div>
           <ConnectButton
             chainStatus={{ smallScreen: "icon", largeScreen: "full" }}
