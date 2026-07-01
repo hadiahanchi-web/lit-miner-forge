@@ -69,7 +69,7 @@ export function useMiners() {
   const miners: OnChainMiner[] = useMemo(() => {
     if (!data) return [];
     return data.map((d, i) => {
-      const r = (d.result ?? []) as readonly [bigint, bigint, bigint, bigint, bigint, boolean, bigint];
+      const r = (d.result ?? []) as readonly [bigint, bigint, bigint, bigint, bigint, boolean];
       return {
         id: i,
         price: r?.[0] ?? 0n,
@@ -78,7 +78,7 @@ export function useMiners() {
         unlockRequiresId: r?.[3] ?? 0n,
         unlockMinInvested: r?.[4] ?? 0n,
         active: r?.[5] ?? false,
-        totalMintedGlobal: r?.[6] ?? 0n,
+        totalMintedGlobal: 0n,
       };
     });
   }, [data]);
