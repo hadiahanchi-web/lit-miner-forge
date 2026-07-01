@@ -10,14 +10,16 @@ export const Route = createFileRoute("/leaderboard")({
   head: () => ({
     meta: [
       { title: "Leaderboard — LiteMiner" },
-      { name: "description", content: "Top zkLTC miners on the LitVM LiteForge testnet." },
+      { name: "description", content: "Top zkLTC miners ranked by efficiency, uptime, and lifetime rewards on the LitVM LiteForge testnet." },
     ],
   }),
   component: Leaderboard,
 });
 
-type SortKey = "power" | "claimed" | "invested" | "minerCount" | "level";
+type SortKey = "efficiencyPct" | "uptimeSec" | "power" | "claimed" | "invested" | "minerCount" | "level";
 const SORT_LABEL: Record<SortKey, string> = {
+  efficiencyPct: "Efficiency (ROI %)",
+  uptimeSec: "Mining uptime",
   power: "Mining power",
   claimed: "Lifetime rewards",
   invested: "Investment",
@@ -28,7 +30,7 @@ const SORT_LABEL: Record<SortKey, string> = {
 function Leaderboard() {
   const rows = useLeaderboard();
   const { address } = useAccount();
-  const [sort, setSort] = useState<SortKey>("power");
+  const [sort, setSort] = useState<SortKey>("efficiencyPct");
 
   const enriched = useMemo(() => {
     return [...rows]
@@ -40,6 +42,9 @@ function Leaderboard() {
         invested: r.totalInvested,
         referrals: r.referrals.length,
         level: playerLevel(r.totalInvested),
+        efficiencyPct: r.efficiencyPct,
+        avgHwEfficiency: r.avgHwEfficiency,
+        uptimeSec: r.uptimeSec,
       }))
       .sort((a, b) => (b[sort] as number) - (a[sort] as number));
   }, [rows, sort]);
@@ -76,6 +81,9 @@ function Leaderboard() {
               <th className="px-4 py-3 text-left">Wallet</th>
               <th className="px-4 py-3 text-right">Lv</th>
               <th className="px-4 py-3 text-right">Miners</th>
+              <th className="px-4 py-3 text-right">HW Eff</th>
+              <th className="px-4 py-3 text-right">ROI %</th>
+              <th className="px-4 py-3 text-right">Uptime (h)</th>
               <th className="px-4 py-3 text-right">Power / day</th>
               <th className="px-4 py-3 text-right">Claimed</th>
               <th className="px-4 py-3 text-right">Invested</th>
@@ -85,7 +93,7 @@ function Leaderboard() {
           <tbody>
             {enriched.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                <td colSpan={11} className="px-4 py-12 text-center text-muted-foreground">
                   No miners yet. Be the first to deploy a rig.
                 </td>
               </tr>
@@ -117,6 +125,11 @@ function Leaderboard() {
                   </td>
                   <td className="px-4 py-3 text-right font-mono neon-blue">{r.level}</td>
                   <td className="px-4 py-3 text-right font-mono">{r.minerCount}</td>
+                  <td className="px-4 py-3 text-right font-mono">{r.avgHwEfficiency.toFixed(2)}×</td>
+                  <td className="px-4 py-3 text-right font-mono neon-orange">
+                    {r.efficiencyPct.toFixed(1)}%
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono">{(r.uptimeSec / 3600).toFixed(1)}</td>
                   <td className="px-4 py-3 text-right font-mono neon-blue">{fmtZk(r.power, 5)}</td>
                   <td className="px-4 py-3 text-right font-mono neon-orange">
                     {fmtZk(r.claimed, 4)}

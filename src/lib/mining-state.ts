@@ -1,6 +1,6 @@
-// Local simulation store that mirrors MiningManager.sol behavior.
-// Each wallet has an isolated persisted state under localStorage.
-// Swap useMiningState() for wagmi reads once the contract is deployed.
+// Local simulation of the LiteMiner v4 protocol.
+// Sustainable economy: daily reward budget, per-wallet epoch cap, wallet energy,
+// miner durability + repair, action cooldowns, and efficiency-based leaderboard.
 
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -21,9 +21,22 @@ import {
   CHEST_MAX,
   SPIN_SLOTS,
   ACHIEVEMENTS,
+  EPOCH_SEC,
+  DAILY_EMISSION_BPS,
+  PER_WALLET_EPOCH_CAP_BPS,
+  WALLET_ENERGY_MAX,
+  WALLET_ENERGY_REGEN_PER_SEC,
+  WALLET_ENERGY_DRAIN_PER_SEC,
+  ENERGY_REFILL_COST_PER_UNIT,
+  DURABILITY_MAX,
+  REPAIR_COST_BPS,
+  ACTION_COOLDOWN_SEC,
+  CLAIMS_PER_EPOCH,
+  durabilityDrainPerSec,
+  tierEfficiency,
 } from "./miners";
 
-const DAY = 86_400;
+const DAY = EPOCH_SEC;
 
 export type MissionId = "buy" | "upgrade" | "claim" | "login";
 export const MISSION_LIST: {
@@ -47,22 +60,33 @@ export interface PlayerState {
   pending: number;
   minerCounts: number[];
   minerLevels: number[];
-  /** Per-tier energy (0..capacity). Drains while active, regens when idle. */
-  minerEnergy: number[];
+  /** Per-tier average durability 0..DURABILITY_MAX. */
+  minerDurability: number[];
+  // wallet energy
+  walletEnergy: number;
+  // uptime & anti-farm
+  uptimeSec: number;         // seconds of productive mining accumulated
+  lastActionAt: number;      // cooldown reference
+  // per-epoch tracking
+  epoch: number;             // floor(now / EPOCH_SEC)
+  earnedThisEpoch: number;   // zkLTC minted from mining this epoch
+  epochCap: number;          // snapshot cap for this epoch
+  claimsThisEpoch: number;
   // referrals
   referrer?: string;
   referrals: string[];
   referralEarnings: number;
   // missions
-  missionsDate: string; // YYYY-MM-DD (UTC)
+  missionsDate: string;
   missionsDone: MissionId[];
   // daily engagement
   chestDate?: string;
   spinDate?: string;
-  // stats for achievements
+  // stats
   totalUpgrades: number;
   totalClaims: number;
-  achievements: string[]; // claimed ids
+  totalRepairs: number;
+  achievements: string[];
 }
 
 export interface PoolState {
@@ -74,16 +98,23 @@ export interface PoolState {
   withdrawPaused: boolean;
   rewardBps: number;
   treasuryBps: number;
+  dailyEmissionBps: number;
+  perWalletEpochCapBps: number;
   players: string[];
+  // global epoch budget
+  epoch: number;
+  epochBudget: number;      // snapshot of pool * dailyEmissionBps at epoch start
+  epochRemaining: number;   // decreases as mining pays out
 }
 
-const POOL_KEY = "liteminer:pool:v3";
-const PLAYER_KEY = (a: string) => `liteminer:player:${a.toLowerCase()}:v3`;
+const POOL_KEY = "liteminer:pool:v4";
+const PLAYER_KEY = (a: string) => `liteminer:player:${a.toLowerCase()}:v4`;
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 const todayUTC = () => new Date().toISOString().slice(0, 10);
+const currentEpoch = () => Math.floor(nowSec() / EPOCH_SEC);
 
-/** Base rate ignoring energy/emissions (used to display "max rate"). */
+/** Nominal rate ignoring energy/durability/emissions/budget (used for "max rate"). */
 function baseRatePerSecond(counts: number[], levels: number[]): number {
   return counts.reduce((acc, c, i) => {
     if (c === 0) return acc;
@@ -92,24 +123,29 @@ function baseRatePerSecond(counts: number[], levels: number[]): number {
   }, 0);
 }
 
-/** Effective rate = base × emission (pool health) × mean energy factor. */
+/** Effective mining rate factoring in durability & wallet energy & pool-health throttle. */
 function effectiveRatePerSecond(
   counts: number[],
   levels: number[],
-  energy: number[],
+  durability: number[],
+  walletEnergy: number,
   pool: PoolState,
 ): number {
   const emission = emissionMultiplier(poolHealth(pool.rewardPool, pool.totalDeposits, pool.rewardBps));
+  if (walletEnergy <= 0) return 0;
+  // wallet energy soft-throttle: <25% → linear scale to 0
+  const eNorm = Math.max(0, Math.min(1, walletEnergy / WALLET_ENERGY_MAX));
+  const walletFactor = eNorm < 0.25 ? eNorm / 0.25 : 1;
+
   let total = 0;
   for (let i = 0; i < MINERS.length; i++) {
     if (counts[i] === 0) continue;
     const mult = levelMultiplier(levels[i] || 1);
-    // 0 energy → miner offline; scales linearly under 25%
-    const eNorm = Math.max(0, Math.min(1, (energy[i] ?? MINERS[i].energyCapacity) / MINERS[i].energyCapacity));
-    const eFactor = eNorm <= 0 ? 0 : eNorm < 0.25 ? eNorm / 0.25 : 1;
-    total += (counts[i] * MINERS[i].ratePerDay * mult * eFactor) / DAY;
+    const d = Math.max(0, Math.min(DURABILITY_MAX, durability[i] ?? DURABILITY_MAX));
+    const dFactor = d <= 0 ? 0 : d < 25 ? d / 25 : 1;
+    total += (counts[i] * MINERS[i].ratePerDay * mult * dFactor) / DAY;
   }
-  return total * emission;
+  return total * emission * walletFactor;
 }
 
 function emptyPool(): PoolState {
@@ -122,7 +158,12 @@ function emptyPool(): PoolState {
     withdrawPaused: false,
     rewardBps: REWARD_POOL_BPS,
     treasuryBps: TREASURY_BPS,
+    dailyEmissionBps: DAILY_EMISSION_BPS,
+    perWalletEpochCapBps: PER_WALLET_EPOCH_CAP_BPS,
     players: [],
+    epoch: currentEpoch(),
+    epochBudget: 0,
+    epochRemaining: 0,
   };
 }
 
@@ -136,13 +177,21 @@ function emptyPlayer(a: string): PlayerState {
     pending: 0,
     minerCounts: MINERS.map(() => 0),
     minerLevels: MINERS.map(() => 0),
-    minerEnergy: MINERS.map((m) => m.energyCapacity),
+    minerDurability: MINERS.map(() => DURABILITY_MAX),
+    walletEnergy: WALLET_ENERGY_MAX,
+    uptimeSec: 0,
+    lastActionAt: 0,
+    epoch: currentEpoch(),
+    earnedThisEpoch: 0,
+    epochCap: 0,
+    claimsThisEpoch: 0,
     referrals: [],
     referralEarnings: 0,
     missionsDate: todayUTC(),
     missionsDone: [],
     totalUpgrades: 0,
     totalClaims: 0,
+    totalRepairs: 0,
     achievements: [],
   };
 }
@@ -174,7 +223,7 @@ function loadPlayer(a: string): PlayerState {
   }
   while (p.minerCounts.length < MINERS.length) p.minerCounts.push(0);
   while (p.minerLevels.length < MINERS.length) p.minerLevels.push(0);
-  while (p.minerEnergy.length < MINERS.length) p.minerEnergy.push(MINERS[p.minerEnergy.length].energyCapacity);
+  while (p.minerDurability.length < MINERS.length) p.minerDurability.push(DURABILITY_MAX);
   if (p.missionsDate !== todayUTC()) {
     p.missionsDate = todayUTC();
     p.missionsDone = [];
@@ -186,21 +235,74 @@ function savePlayer(p: PlayerState) {
   window.dispatchEvent(new Event("liteminer:player:" + p.address.toLowerCase()));
 }
 
-/** Accrue rewards + drain/regen energy since lastUpdate. */
+/** Reset global epoch budget on epoch rollover. Snapshots budget from current pool. */
+function rollPoolEpoch(pool: PoolState) {
+  const ep = currentEpoch();
+  if (ep !== pool.epoch) {
+    pool.epoch = ep;
+    pool.epochBudget = (pool.rewardPool * pool.dailyEmissionBps) / 10_000;
+    pool.epochRemaining = pool.epochBudget;
+  } else if (pool.epochBudget === 0 && pool.rewardPool > 0) {
+    // first-ever init
+    pool.epochBudget = (pool.rewardPool * pool.dailyEmissionBps) / 10_000;
+    pool.epochRemaining = pool.epochBudget;
+  }
+}
+
+/** Reset player-epoch tracking + snapshot per-wallet cap from current pool budget. */
+function rollPlayerEpoch(p: PlayerState, pool: PoolState) {
+  const ep = currentEpoch();
+  if (ep !== p.epoch) {
+    p.epoch = ep;
+    p.earnedThisEpoch = 0;
+    p.claimsThisEpoch = 0;
+    p.epochCap = (pool.epochBudget * pool.perWalletEpochCapBps) / 10_000;
+  } else if (p.epochCap === 0 && pool.epochBudget > 0) {
+    p.epochCap = (pool.epochBudget * pool.perWalletEpochCapBps) / 10_000;
+  }
+}
+
+/** Accrue rewards + drain/regen energy + drain durability since lastUpdate. */
 function accrue(p: PlayerState, pool: PoolState): PlayerState {
+  rollPoolEpoch(pool);
+  rollPlayerEpoch(p, pool);
+
   const now = nowSec();
   const dt = Math.max(0, now - p.lastUpdate);
   if (dt === 0) return p;
-  const rps = effectiveRatePerSecond(p.minerCounts, p.minerLevels, p.minerEnergy, pool);
-  const next = { ...p, pending: p.pending + rps * dt, lastUpdate: now };
-  // update energy per tier
-  next.minerEnergy = p.minerEnergy.map((e, i) => {
-    const cap = MINERS[i].energyCapacity;
-    if (p.minerCounts[i] === 0) return cap;
-    const drain = MINERS[i].energyDrainPerSec * dt;
-    return Math.max(0, Math.min(cap, e - drain));
-  });
-  return next;
+
+  const hasFleet = p.minerCounts.some((c) => c > 0);
+  const rps = effectiveRatePerSecond(p.minerCounts, p.minerLevels, p.minerDurability, p.walletEnergy, pool);
+
+  // Reward = rps * dt but capped by per-wallet epoch cap AND global epoch budget
+  let reward = rps * dt;
+  const capRemainWallet = Math.max(0, p.epochCap - p.earnedThisEpoch);
+  reward = Math.min(reward, capRemainWallet, pool.epochRemaining);
+  reward = Math.max(0, reward);
+  p.pending += reward;
+  p.earnedThisEpoch += reward;
+  pool.epochRemaining = Math.max(0, pool.epochRemaining - reward);
+
+  // Uptime: seconds during which we actually paid out something
+  if (reward > 0) p.uptimeSec += dt;
+
+  // Wallet energy: drain while mining, regen while idle (or capped)
+  if (hasFleet && rps > 0) {
+    p.walletEnergy = Math.max(0, p.walletEnergy - WALLET_ENERGY_DRAIN_PER_SEC * dt);
+  } else {
+    p.walletEnergy = Math.min(WALLET_ENERGY_MAX, p.walletEnergy + WALLET_ENERGY_REGEN_PER_SEC * dt);
+  }
+
+  // Miner durability: drain proportional to fleet activity (only when producing)
+  if (rps > 0) {
+    for (let i = 0; i < MINERS.length; i++) {
+      if (p.minerCounts[i] === 0) continue;
+      p.minerDurability[i] = Math.max(0, (p.minerDurability[i] ?? DURABILITY_MAX) - durabilityDrainPerSec(i) * dt);
+    }
+  }
+
+  p.lastUpdate = now;
+  return p;
 }
 
 function completeMission(p: PlayerState, id: MissionId, pool: PoolState): PlayerState {
@@ -246,6 +348,26 @@ export function isMinerUnlocked(minerId: number, player: PlayerState | null): bo
   return false;
 }
 
+/** Enforce anti-bot cooldown between mutating actions. */
+function assertCooldown(p: PlayerState) {
+  const dt = nowSec() - p.lastActionAt;
+  if (dt < ACTION_COOLDOWN_SEC) {
+    throw new Error(`Cooldown: wait ${ACTION_COOLDOWN_SEC - dt}s before next action`);
+  }
+}
+
+function stamp(p: PlayerState) {
+  p.lastActionAt = nowSec();
+}
+
+/** Split a fee into the 70/30 pool/treasury sinks. */
+function ingestFee(pool: PoolState, amount: number) {
+  const toPool = (amount * pool.rewardBps) / 10_000;
+  pool.rewardPool += toPool;
+  pool.treasury += amount - toPool;
+  pool.totalDeposits += amount;
+}
+
 export function useMiningState(address?: string) {
   const [pool, setPool] = useState<PoolState>(() => loadPool());
   const [player, setPlayer] = useState<PlayerState | null>(() =>
@@ -277,20 +399,24 @@ export function useMiningState(address?: string) {
   }, []);
 
   const baseRps = player ? baseRatePerSecond(player.minerCounts, player.minerLevels) : 0;
-  const effRps = player ? effectiveRatePerSecond(player.minerCounts, player.minerLevels, player.minerEnergy, pool) : 0;
-  const livePending = player ? player.pending + effRps * (nowSec() - player.lastUpdate) : 0;
+  const effRps = player ? effectiveRatePerSecond(player.minerCounts, player.minerLevels, player.minerDurability, player.walletEnergy, pool) : 0;
   const health = poolHealth(pool.rewardPool, pool.totalDeposits, pool.rewardBps);
   const emission = emissionMultiplier(health);
+  const capRemain = player ? Math.max(0, player.epochCap - player.earnedThisEpoch) : 0;
+  const budgetProjected = Math.min(effRps * (nowSec() - (player?.lastUpdate ?? nowSec())), capRemain, pool.epochRemaining);
+  const livePending = player ? player.pending + Math.max(0, budgetProjected) : 0;
 
   const register = useCallback(
     (referrer?: string) => {
       if (!address) return;
       const pool = loadPool();
+      rollPoolEpoch(pool);
       const p = loadPlayer(address);
       let dirty = false;
       if (!p.registered) {
         p.registered = true;
         p.lastUpdate = nowSec();
+        rollPlayerEpoch(p, pool);
         dirty = true;
         if (!pool.players.includes(address.toLowerCase())) {
           pool.players.push(address.toLowerCase());
@@ -326,6 +452,7 @@ export function useMiningState(address?: string) {
       if (pool.paused) throw new Error("Mining paused");
       const miner = MINERS[minerId];
       let p = loadPlayer(address);
+      assertCooldown(p);
       if (!isMinerUnlocked(minerId, p)) throw new Error(`Locked: ${miner.unlock.label}`);
       const price = miner.price;
       if (!p.registered) {
@@ -335,14 +462,9 @@ export function useMiningState(address?: string) {
       p = accrue(p, pool);
       p.minerCounts[minerId] += 1;
       if (p.minerLevels[minerId] === 0) p.minerLevels[minerId] = 1;
-      p.minerEnergy[minerId] = miner.energyCapacity; // fresh rig is fully charged
+      p.minerDurability[minerId] = DURABILITY_MAX; // fresh rig
       p.totalInvested += price;
-
-      const rewardCut = (price * pool.rewardBps) / 10_000;
-      const treasuryCut = price - rewardCut;
-      pool.rewardPool += rewardCut;
-      pool.treasury += treasuryCut;
-      pool.totalDeposits += price;
+      ingestFee(pool, price);
 
       if (p.referrer) {
         const bonus = (price * REFERRAL_BPS) / 10_000;
@@ -358,6 +480,7 @@ export function useMiningState(address?: string) {
 
       completeMission(p, "buy", pool);
       grantAchievements(p, pool);
+      stamp(p);
       savePlayer(p);
       savePool(pool);
     },
@@ -370,6 +493,7 @@ export function useMiningState(address?: string) {
       const pool = loadPool();
       if (pool.paused) throw new Error("Mining paused");
       let p = loadPlayer(address);
+      assertCooldown(p);
       const level = p.minerLevels[minerId] || 0;
       if (level === 0 || p.minerCounts[minerId] === 0) throw new Error("Buy this miner first");
       if (level >= MAX_LEVEL) throw new Error("Max level reached");
@@ -378,12 +502,10 @@ export function useMiningState(address?: string) {
       p.minerLevels[minerId] = level + 1;
       p.totalInvested += cost;
       p.totalUpgrades += 1;
-      const rewardCut = (cost * pool.rewardBps) / 10_000;
-      pool.rewardPool += rewardCut;
-      pool.treasury += cost - rewardCut;
-      pool.totalDeposits += cost;
+      ingestFee(pool, cost);
       completeMission(p, "upgrade", pool);
       grantAchievements(p, pool);
+      stamp(p);
       savePlayer(p);
       savePool(pool);
     },
@@ -395,48 +517,74 @@ export function useMiningState(address?: string) {
     const pool = loadPool();
     if (pool.withdrawPaused) throw new Error("Withdrawals paused");
     let p = loadPlayer(address);
+    assertCooldown(p);
     p = accrue(p, pool);
+    if (p.claimsThisEpoch >= CLAIMS_PER_EPOCH) {
+      throw new Error(`Only ${CLAIMS_PER_EPOCH} claim per 24h epoch — try tomorrow`);
+    }
     if (p.pending < WITHDRAW_THRESHOLD)
       throw new Error(`Need ${WITHDRAW_THRESHOLD} zkLTC to withdraw`);
-    // Cap payout at pool balance so tx never reverts on depletion
+    // Cap payout at pool balance and at remaining daily budget
     const gross = Math.min(p.pending, pool.rewardPool);
     if (gross <= 0) throw new Error("Reward pool empty — try again later");
-    // Maintenance fee: 5% of the claim returns to treasury (energy cost).
     const fee = (gross * MAINTENANCE_FEE_BPS) / 10_000;
     const net = gross - fee;
     p.pending -= gross;
     p.lifetimeRewards += net;
     p.totalClaims += 1;
+    p.claimsThisEpoch += 1;
     pool.rewardPool -= gross;
     pool.treasury += fee;
     pool.totalDistributed += net;
     completeMission(p, "claim", pool);
     grantAchievements(p, pool);
+    stamp(p);
     savePlayer(p);
     savePool(pool);
     return { net, fee };
   }, [address]);
 
-  const rechargeAll = useCallback(() => {
+  /** Repair all miner tiers to full durability. Cost = missing units * REPAIR_COST_BPS%. */
+  const repairAll = useCallback(() => {
     if (!address) throw new Error("Wallet not connected");
     const pool = loadPool();
     let p = loadPlayer(address);
+    assertCooldown(p);
     p = accrue(p, pool);
-    // Cost = 0.5% of price per unit for each tier fully recharged
     let cost = 0;
     for (let i = 0; i < MINERS.length; i++) {
-      if (p.minerCounts[i] > 0 && p.minerEnergy[i] < MINERS[i].energyCapacity) {
-        const missing = MINERS[i].energyCapacity - p.minerEnergy[i];
-        const frac = missing / MINERS[i].energyCapacity;
-        cost += p.minerCounts[i] * MINERS[i].price * 0.005 * frac;
-        p.minerEnergy[i] = MINERS[i].energyCapacity;
+      if (p.minerCounts[i] > 0 && p.minerDurability[i] < DURABILITY_MAX) {
+        const missing = DURABILITY_MAX - p.minerDurability[i];
+        const fracOfFull = missing / DURABILITY_MAX;
+        // 20% of price for a full repair, per rig
+        cost += p.minerCounts[i] * MINERS[i].price * (REPAIR_COST_BPS / 10_000) * DURABILITY_MAX * fracOfFull;
+        p.minerDurability[i] = DURABILITY_MAX;
       }
     }
-    if (cost <= 0) throw new Error("All rigs are fully charged");
+    if (cost <= 0) throw new Error("All rigs are in mint condition");
     p.totalInvested += cost;
-    // 100% of recharge fee goes to treasury (energy = ops cost)
-    pool.treasury += cost;
-    pool.totalDeposits += cost;
+    p.totalRepairs += 1;
+    ingestFee(pool, cost);
+    stamp(p);
+    savePlayer(p);
+    savePool(pool);
+    return cost;
+  }, [address]);
+
+  /** Refill wallet energy to 100%. Cost per unit = ENERGY_REFILL_COST_PER_UNIT zkLTC. */
+  const refillEnergy = useCallback(() => {
+    if (!address) throw new Error("Wallet not connected");
+    const pool = loadPool();
+    let p = loadPlayer(address);
+    assertCooldown(p);
+    p = accrue(p, pool);
+    const missing = WALLET_ENERGY_MAX - p.walletEnergy;
+    if (missing <= 0) throw new Error("Wallet energy already full");
+    const cost = missing * ENERGY_REFILL_COST_PER_UNIT;
+    p.walletEnergy = WALLET_ENERGY_MAX;
+    p.totalInvested += cost;
+    ingestFee(pool, cost);
+    stamp(p);
     savePlayer(p);
     savePool(pool);
     return cost;
@@ -494,20 +642,26 @@ export function useMiningState(address?: string) {
     ratePerSecond: effRps,
     poolHealth: health,
     emissionMultiplier: emission,
+    epochCapRemaining: capRemain,
+    epochBudgetRemaining: pool.epochRemaining,
+    epochBudget: pool.epochBudget,
     register,
     buyMiner,
     upgradeMiner,
     claim,
-    rechargeAll,
+    repairAll,
+    refillEnergy,
     openChest,
     spin,
   };
 }
 
-// Leaderboard
+// Leaderboard — v4 metrics: efficiency (rewards/invested), uptime, lifetime, invested
 export interface LeaderRow extends PlayerState {
   power: number;
   minerCount: number;
+  efficiencyPct: number; // lifetimeRewards / totalInvested
+  avgHwEfficiency: number;
 }
 export function useLeaderboard(): LeaderRow[] {
   const [rows, setRows] = useState<LeaderRow[]>([]);
@@ -519,7 +673,12 @@ export function useLeaderboard(): LeaderRow[] {
           const p = loadPlayer(a);
           const minerCount = p.minerCounts.reduce((s, n) => s + n, 0);
           const power = baseRatePerSecond(p.minerCounts, p.minerLevels) * DAY;
-          return { ...p, minerCount, power };
+          const efficiencyPct = p.totalInvested > 0 ? (p.lifetimeRewards / p.totalInvested) * 100 : 0;
+          // weighted hw efficiency
+          let sum = 0;
+          for (let i = 0; i < MINERS.length; i++) sum += (p.minerCounts[i] || 0) * tierEfficiency(i);
+          const avgHwEfficiency = minerCount > 0 ? sum / minerCount : 0;
+          return { ...p, minerCount, power, efficiencyPct, avgHwEfficiency };
         }),
       );
     };
@@ -541,5 +700,8 @@ export function adminReadPool(): PoolState {
 export function adminFundPool(amount: number) {
   const p = loadPool();
   p.rewardPool += amount;
+  // re-snapshot epoch budget so operator sees immediate effect
+  p.epochBudget = (p.rewardPool * p.dailyEmissionBps) / 10_000;
+  p.epochRemaining = Math.max(p.epochRemaining, p.epochBudget);
   savePool(p);
 }

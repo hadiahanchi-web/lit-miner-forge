@@ -5,7 +5,7 @@ export interface MinerType {
   id: number;
   name: string;
   price: number; // zkLTC
-  ratePerDay: number; // zkLTC / day at level 1
+  ratePerDay: number; // zkLTC / day at level 1, 100% efficiency, 100% durability
   color: string;
   accent: string;
   description: string;
@@ -14,10 +14,10 @@ export interface MinerType {
   symbol: string;
   /** Player-level unlock: previous tier must be owned OR minInvested reached. */
   unlock: { requiresMinerId?: number; minInvested?: number; label: string };
-  /** Energy capacity per unit; drains while running, regens when idle. */
-  energyCapacity: number;
-  /** Energy drain per second per unit while active. */
-  energyDrainPerSec: number;
+  /** Static hardware efficiency stat 0.5 .. 2.0 (already reflected in ratePerDay/price). */
+  efficiency: number;
+  /** Hours of continuous mining before durability hits 0 (needs repair). */
+  durabilityLifespanHours: number;
 }
 
 // Order matters: IDs are used on-chain. New tiers must append.
@@ -34,8 +34,8 @@ export const MINERS: MinerType[] = [
     symbol: "USB",
     description: "Onboarding rig. Plug in, learn the ropes, mine your first sats.",
     unlock: { label: "No requirement" },
-    energyCapacity: 100,
-    energyDrainPerSec: 100 / (24 * 3600), // full day of runtime
+    efficiency: 0.6,
+    durabilityLifespanHours: 168, // 7 days
   },
   {
     id: 1,
@@ -49,8 +49,8 @@ export const MINERS: MinerType[] = [
     symbol: "S1",
     description: "Reliable entry-level rig. Perfect for your first shaft.",
     unlock: { requiresMinerId: 0, label: "Own a Basic USB Miner" },
-    energyCapacity: 100,
-    energyDrainPerSec: 100 / (18 * 3600),
+    efficiency: 0.9,
+    durabilityLifespanHours: 120,
   },
   {
     id: 2,
@@ -64,8 +64,8 @@ export const MINERS: MinerType[] = [
     symbol: "GPU",
     description: "Parallelized GPU array. Higher throughput, higher heat.",
     unlock: { requiresMinerId: 1, label: "Own a Starter Miner" },
-    energyCapacity: 100,
-    energyDrainPerSec: 100 / (12 * 3600),
+    efficiency: 1.1,
+    durabilityLifespanHours: 96,
   },
   {
     id: 3,
@@ -79,8 +79,8 @@ export const MINERS: MinerType[] = [
     symbol: "ASIC",
     description: "Application-specific silicon tuned for zkLTC hashing.",
     unlock: { requiresMinerId: 2, label: "Own a GPU Miner" },
-    energyCapacity: 100,
-    energyDrainPerSec: 100 / (10 * 3600),
+    efficiency: 1.4,
+    durabilityLifespanHours: 72,
   },
   {
     id: 4,
@@ -94,8 +94,8 @@ export const MINERS: MinerType[] = [
     symbol: "QTM",
     description: "Superposition-driven proofs. Cold, silent, devastating.",
     unlock: { requiresMinerId: 3, label: "Own an ASIC Miner" },
-    energyCapacity: 100,
-    energyDrainPerSec: 100 / (8 * 3600),
+    efficiency: 1.7,
+    durabilityLifespanHours: 60,
   },
   {
     id: 5,
@@ -109,20 +109,49 @@ export const MINERS: MinerType[] = [
     symbol: "FUS",
     description: "Reactor-class rig. The apex of the LiteForge fleet.",
     unlock: { requiresMinerId: 4, label: "Own a Quantum Miner" },
-    energyCapacity: 100,
-    energyDrainPerSec: 100 / (6 * 3600),
+    efficiency: 2.0,
+    durabilityLifespanHours: 48,
   },
 ];
 
-// Economics
-export const WITHDRAW_THRESHOLD = 0.01; // zkLTC (testnet-friendly)
-export const REWARD_POOL_BPS = 8000; // 80% of purchase → reward pool
-export const TREASURY_BPS = 2000; // 20% → treasury
-export const MAINTENANCE_FEE_BPS = 500; // 5% of every claim → treasury (energy cost)
+// ============================================================================
+//  v4 — Sustainable economy
+// ============================================================================
+
+// Withdrawals
+export const WITHDRAW_THRESHOLD = 0.005; // zkLTC (very low for testnet)
+export const CLAIMS_PER_EPOCH = 1;       // 1 claim per 24h epoch
+
+// Fee split — all inflows split 70% pool / 30% treasury (was 80/20)
+export const REWARD_POOL_BPS = 7000;
+export const TREASURY_BPS = 3000;
+export const MAINTENANCE_FEE_BPS = 500;  // 5% of claim → treasury (energy cost)
+
+// Daily reward budget
+export const EPOCH_SEC = 86_400;
+/** % of the reward pool that can be emitted globally per epoch (5%). */
+export const DAILY_EMISSION_BPS = 500;
+/** % of the daily emission any single wallet can earn per epoch (1%). */
+export const PER_WALLET_EPOCH_CAP_BPS = 100;
+
+// Wallet energy (0..100, regenerates when idle, drains while mining)
+export const WALLET_ENERGY_MAX = 100;
+export const WALLET_ENERGY_REGEN_PER_SEC = 100 / (6 * 3600);   // full regen in 6h
+export const WALLET_ENERGY_DRAIN_PER_SEC = 100 / (12 * 3600);  // full drain in 12h mining
+/** Refill 1 energy unit costs this many zkLTC (paid to sinks). */
+export const ENERGY_REFILL_COST_PER_UNIT = 0.0002;
+
+// Miner durability (per-tier avg 0..100). Drains proportional to fleet size.
+export const DURABILITY_MAX = 100;
+/** Repair 1 unit of durability per owned rig costs this fraction of miner price. */
+export const REPAIR_COST_BPS = 20; // 0.2% of price per unit per rig → full repair = 20% of one rig price
+
+// Anti-farm
+export const ACTION_COOLDOWN_SEC = 3;
 
 // Upgrades — balanced exponential
 export const MAX_LEVEL = 10;
-/** Cost from L→L+1: 0.2 * price * 1.5^(level-1). L1→L2 = 0.2×, L9→L10 ≈ 5.1× */
+/** Cost from L→L+1: 0.2 * price * 1.5^(level-1). */
 export function upgradeCost(minerId: number, currentLevel: number): number {
   if (currentLevel <= 0 || currentLevel >= MAX_LEVEL) return Infinity;
   const base = MINERS[minerId].price;
@@ -133,7 +162,7 @@ export function levelMultiplier(level: number): number {
   return 1 + (Math.max(1, level) - 1) * 0.25;
 }
 
-// Dynamic emissions — reduce yield as pool depletes so it never runs dry
+// Pool-health emission throttle (independent of daily budget — extra safety valve).
 export function poolHealth(rewardPool: number, totalDeposits: number, rewardBps: number): number {
   const funded = Math.max(1e-9, (totalDeposits * rewardBps) / 10_000);
   return Math.max(0, Math.min(1, rewardPool / funded));
@@ -147,21 +176,31 @@ export function emissionMultiplier(health: number): number {
   return 0;
 }
 
+/** Duration for full-durability drain in seconds, for a given tier. */
+export function durabilityDrainPerSec(minerId: number): number {
+  return DURABILITY_MAX / (MINERS[minerId].durabilityLifespanHours * 3600);
+}
+
+/** Static per-tier efficiency stat surfaced to the UI. */
+export function tierEfficiency(minerId: number): number {
+  return MINERS[minerId].efficiency;
+}
+
 // Referrals
 export const REFERRAL_BPS = 500; // 5% of purchase → referrer
 
 // Daily engagement
-export const MISSION_REWARD = 0.02;
-export const DAILY_LOGIN_REWARD = 0.005;
-export const CHEST_MIN = 0.005;
-export const CHEST_MAX = 0.05;
+export const MISSION_REWARD = 0.01;
+export const DAILY_LOGIN_REWARD = 0.003;
+export const CHEST_MIN = 0.002;
+export const CHEST_MAX = 0.02;
 export const SPIN_SLOTS: { label: string; amount: number; weight: number }[] = [
-  { label: "0.001", amount: 0.001, weight: 30 },
-  { label: "0.005", amount: 0.005, weight: 25 },
-  { label: "0.01", amount: 0.01, weight: 20 },
-  { label: "0.025", amount: 0.025, weight: 12 },
-  { label: "0.05", amount: 0.05, weight: 8 },
-  { label: "0.1 ★", amount: 0.1, weight: 5 },
+  { label: "0.0005", amount: 0.0005, weight: 30 },
+  { label: "0.002", amount: 0.002, weight: 25 },
+  { label: "0.005", amount: 0.005, weight: 20 },
+  { label: "0.01", amount: 0.01, weight: 15 },
+  { label: "0.025", amount: 0.025, weight: 7 },
+  { label: "0.05 ★", amount: 0.05, weight: 3 },
 ];
 
 // Player level: sqrt(invested * 10), capped at 100.
@@ -169,21 +208,21 @@ export function playerLevel(invested: number): number {
   return Math.min(100, Math.floor(Math.sqrt(Math.max(0, invested) * 10)));
 }
 
-// Achievements catalogue
+// Achievements
 export interface Achievement {
   id: string;
   label: string;
   description: string;
-  reward: number; // zkLTC bonus into pending
+  reward: number;
   check: (ctx: { totalMiners: number; totalUpgrades: number; totalClaims: number; invested: number; referrals: number }) => boolean;
 }
 export const ACHIEVEMENTS: Achievement[] = [
-  { id: "first_miner", label: "First Miner", description: "Deploy any rig.", reward: 0.005, check: (c) => c.totalMiners >= 1 },
-  { id: "ten_miners", label: "10 Miners", description: "Own 10 rigs total.", reward: 0.05, check: (c) => c.totalMiners >= 10 },
-  { id: "first_upgrade", label: "First Upgrade", description: "Level up any rig.", reward: 0.01, check: (c) => c.totalUpgrades >= 1 },
-  { id: "first_claim", label: "First Claim", description: "Claim rewards once.", reward: 0.01, check: (c) => c.totalClaims >= 1 },
-  { id: "invest_100", label: "Whale-in-training", description: "Invest 100 zkLTC.", reward: 0.25, check: (c) => c.invested >= 100 },
-  { id: "invest_1000", label: "Institutional", description: "Invest 1000 zkLTC.", reward: 1, check: (c) => c.invested >= 1000 },
-  { id: "ref_1", label: "Recruiter", description: "Invite your first friend.", reward: 0.02, check: (c) => c.referrals >= 1 },
-  { id: "ref_5", label: "Ambassador", description: "Invite 5 friends.", reward: 0.15, check: (c) => c.referrals >= 5 },
+  { id: "first_miner", label: "First Miner", description: "Deploy any rig.", reward: 0.003, check: (c) => c.totalMiners >= 1 },
+  { id: "ten_miners", label: "10 Miners", description: "Own 10 rigs total.", reward: 0.03, check: (c) => c.totalMiners >= 10 },
+  { id: "first_upgrade", label: "First Upgrade", description: "Level up any rig.", reward: 0.005, check: (c) => c.totalUpgrades >= 1 },
+  { id: "first_claim", label: "First Claim", description: "Claim rewards once.", reward: 0.005, check: (c) => c.totalClaims >= 1 },
+  { id: "invest_100", label: "Whale-in-training", description: "Invest 100 zkLTC.", reward: 0.15, check: (c) => c.invested >= 100 },
+  { id: "invest_1000", label: "Institutional", description: "Invest 1000 zkLTC.", reward: 0.75, check: (c) => c.invested >= 1000 },
+  { id: "ref_1", label: "Recruiter", description: "Invite your first friend.", reward: 0.015, check: (c) => c.referrals >= 1 },
+  { id: "ref_5", label: "Ambassador", description: "Invite 5 friends.", reward: 0.1, check: (c) => c.referrals >= 5 },
 ];

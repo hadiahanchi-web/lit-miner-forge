@@ -32,16 +32,19 @@ contract MiningManager {
         uint256  totalClaims;
     }
 
-    // ---------- Constants ----------
-    uint256 public constant WITHDRAW_THRESHOLD = 1e16; // 0.01 zkLTC (testnet)
+    // ---------- Constants (v4) ----------
+    uint256 public constant WITHDRAW_THRESHOLD = 5e15;  // 0.005 zkLTC
     uint256 public constant MAX_LEVEL = 10;
-    uint256 public constant LEVEL_STEP_BPS = 2500;     // +25% per level
-    uint256 public constant REFERRAL_BPS = 500;        // 5% of purchase → referrer
-    uint256 public constant MAINTENANCE_BPS = 500;     // 5% of claim → treasury
-    uint256 public constant UPGRADE_BASE_BPS = 2000;   // 20% of price base for L1→L2
-    uint256 public constant UPGRADE_GROWTH_NUM = 3;    // 1.5 = 3/2 per level
+    uint256 public constant LEVEL_STEP_BPS = 2500;      // +25% per level
+    uint256 public constant REFERRAL_BPS = 500;         // 5% of purchase → referrer
+    uint256 public constant MAINTENANCE_BPS = 500;      // 5% of claim → treasury
+    uint256 public constant UPGRADE_BASE_BPS = 2000;    // L1→L2 cost = 20% of price
+    uint256 public constant UPGRADE_GROWTH_NUM = 3;     // 1.5x per level
     uint256 public constant UPGRADE_GROWTH_DEN = 2;
     uint256 public constant SENTINEL = type(uint256).max;
+    uint256 public constant EPOCH_LEN = 1 days;
+    uint256 public constant ACTION_COOLDOWN = 3;        // seconds
+    uint256 public constant CLAIMS_PER_EPOCH = 1;
 
     // ---------- Storage ----------
     address public owner;
@@ -54,8 +57,17 @@ contract MiningManager {
     uint256 public totalDeposits;
     uint256 public totalDistributed;
 
-    uint256 public rewardBps = 8000;
-    uint256 public treasuryBps = 2000;
+    // v4: 70/30 split, 5% daily emission of pool, 1% per-wallet cap of daily budget
+    uint256 public rewardBps = 7000;
+    uint256 public treasuryBps = 3000;
+    uint256 public dailyEmissionBps = 500;
+    uint256 public perWalletEpochCapBps = 100;
+
+    // Global epoch budget
+    uint256 public epoch;
+    uint256 public epochBudget;
+    uint256 public epochRemaining;
+
 
     MinerType[] public miners;
     mapping(address => Player) private _players;

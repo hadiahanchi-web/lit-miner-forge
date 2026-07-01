@@ -20,6 +20,8 @@ function Admin() {
   const { address } = useAccount();
   const [pool, setPool] = useState<PoolState>(() => adminReadPool());
   const [rewardBps, setRewardBps] = useState(pool.rewardBps);
+  const [emissionBps, setEmissionBps] = useState(pool.dailyEmissionBps);
+  const [capBps, setCapBps] = useState(pool.perWalletEpochCapBps);
   const [fund, setFund] = useState("");
 
   useEffect(() => {
@@ -29,7 +31,10 @@ function Admin() {
 
   useEffect(() => {
     setRewardBps(pool.rewardBps);
-  }, [pool.rewardBps]);
+    setEmissionBps(pool.dailyEmissionBps);
+    setCapBps(pool.perWalletEpochCapBps);
+  }, [pool.rewardBps, pool.dailyEmissionBps, pool.perWalletEpochCapBps]);
+
 
   if (!address) {
     return (
@@ -144,16 +149,45 @@ function Admin() {
         </div>
 
         <div className="glass rounded-2xl p-5">
-          <h2 className="font-display text-sm font-semibold">Owner utilities</h2>
+          <h2 className="font-display text-sm font-semibold">Emission controls</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Additional owner-only actions available on the on-chain contract.
+            Daily reward budget (% of pool) and per-wallet share (% of budget).
           </p>
-          <ul className="mt-3 space-y-1.5 text-xs text-muted-foreground">
-            <li>· <span className="font-mono neon-blue">addMiner(price, rate)</span> — publish a new tier</li>
-            <li>· <span className="font-mono neon-blue">updateMiner(id, ...)</span> — retune an existing tier</li>
-            <li>· <span className="font-mono neon-blue">withdrawTreasury(to, amt)</span></li>
-            <li>· <span className="font-mono neon-blue">fundRewardPool()</span> payable</li>
-          </ul>
+          <div className="mt-4 space-y-3">
+            <div>
+              <div className="flex justify-between text-[10px] uppercase tracking-widest text-muted-foreground">
+                <span>Daily emission</span>
+                <span className="font-mono neon-blue">{(emissionBps / 100).toFixed(2)}%</span>
+              </div>
+              <input
+                type="range" min={50} max={5000} step={50}
+                value={emissionBps}
+                onChange={(e) => setEmissionBps(Number(e.target.value))}
+                className="w-full accent-sky-400"
+              />
+            </div>
+            <div>
+              <div className="flex justify-between text-[10px] uppercase tracking-widest text-muted-foreground">
+                <span>Per-wallet cap</span>
+                <span className="font-mono neon-orange">{(capBps / 100).toFixed(2)}%</span>
+              </div>
+              <input
+                type="range" min={10} max={2500} step={10}
+                value={capBps}
+                onChange={(e) => setCapBps(Number(e.target.value))}
+                className="w-full accent-orange-500"
+              />
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              adminUpdate({ dailyEmissionBps: emissionBps, perWalletEpochCapBps: capBps });
+              toast.success("Emissions updated");
+            }}
+            className="btn-neon mt-3 w-full rounded-xl px-3 py-2 text-sm"
+          >
+            Save emission
+          </button>
         </div>
 
         <div className="glass rounded-2xl p-5 md:col-span-2">
@@ -163,9 +197,12 @@ function Admin() {
             <Stat label="Treasury" value={`${fmtZk(pool.treasury, 4)} zkLTC`} accent="orange" />
             <Stat label="Total Deposits" value={`${fmtZk(pool.totalDeposits, 4)} zkLTC`} />
             <Stat label="Distributed" value={`${fmtZk(pool.totalDistributed, 4)} zkLTC`} />
-            <Stat label="Players" value={String(pool.players.length)} />
+            <Stat label="Epoch Budget" value={fmtZk(pool.epochBudget, 4)} accent="blue" />
+            <Stat label="Budget Left" value={fmtZk(pool.epochRemaining, 4)} accent="orange" />
             <Stat label="Reward BPS" value={String(pool.rewardBps)} />
-            <Stat label="Treasury BPS" value={String(pool.treasuryBps)} />
+            <Stat label="Players" value={String(pool.players.length)} />
+            <Stat label="Emission BPS" value={String(pool.dailyEmissionBps)} />
+            <Stat label="Wallet Cap BPS" value={String(pool.perWalletEpochCapBps)} />
             <Stat
               label="Status"
               value={pool.paused ? "PAUSED" : "LIVE"}
@@ -173,6 +210,7 @@ function Admin() {
             />
           </div>
         </div>
+
       </div>
     </main>
   );
