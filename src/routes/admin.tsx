@@ -321,7 +321,25 @@ function EmissionCard({ current }: { current: bigint }) {
           onChange={(e) => setBps(Number(e.target.value))}
           className="w-full accent-sky-400"
         />
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            max={100000}
+            step={1}
+            value={bps}
+            onChange={(e) => {
+              const v = Math.floor(Number(e.target.value));
+              if (!isFinite(v)) return;
+              setBps(Math.max(1, Math.min(100000, v)));
+            }}
+            className="flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs outline-none focus:border-sky-500/60"
+            placeholder="bps (1–100000)"
+          />
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">bps</span>
+        </div>
       </div>
+
       <button
         disabled={busy}
         onClick={() =>
