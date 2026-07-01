@@ -23,6 +23,7 @@ import {
 } from "@/lib/onchain";
 import { fmtBig, bigMin } from "@/lib/bigformat";
 import { shortAddr } from "@/lib/format";
+import { MINERS } from "@/lib/miners";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
