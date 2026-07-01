@@ -20,6 +20,8 @@ function Admin() {
   const { address } = useAccount();
   const [pool, setPool] = useState<PoolState>(() => adminReadPool());
   const [rewardBps, setRewardBps] = useState(pool.rewardBps);
+  const [emissionBps, setEmissionBps] = useState(pool.dailyEmissionBps);
+  const [capBps, setCapBps] = useState(pool.perWalletEpochCapBps);
   const [fund, setFund] = useState("");
 
   useEffect(() => {
@@ -29,7 +31,10 @@ function Admin() {
 
   useEffect(() => {
     setRewardBps(pool.rewardBps);
-  }, [pool.rewardBps]);
+    setEmissionBps(pool.dailyEmissionBps);
+    setCapBps(pool.perWalletEpochCapBps);
+  }, [pool.rewardBps, pool.dailyEmissionBps, pool.perWalletEpochCapBps]);
+
 
   if (!address) {
     return (
