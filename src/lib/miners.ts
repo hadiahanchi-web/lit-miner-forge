@@ -17,6 +17,7 @@ export interface MinerType {
   description: string;
   tier: "usb" | "starter" | "gpu" | "asic" | "quantum" | "fusion";
   icon: LucideIcon;
+  image: string;
   symbol: string;
   /** Player-level unlock: previous tier must be owned OR minInvested reached. */
   unlock: { requiresMinerId?: number; minInvested?: number; label: string };
