@@ -201,7 +201,7 @@ function MinerShopCard({
           {!miner.active
             ? "Inactive"
             : !meetsPrereq
-              ? `Requires Miner #${requiresId.toString()}`
+              ? `Requires ${MINERS[Number(requiresId)]?.name ?? `Miner #${requiresId.toString()}`}`
               : `Requires ${fmtBig(miner.unlockMinInvested, 3)} zkLTC invested`}
         </div>
       )}
