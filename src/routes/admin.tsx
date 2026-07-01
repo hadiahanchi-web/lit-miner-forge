@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useReadContract, useReadContracts } from "wagmi";
 import { adminFundPool, adminReadPool, adminUpdate, type PoolState } from "@/lib/mining-state";
 import { fmtZk } from "@/lib/format";
 import { toast } from "sonner";
-import { Pause, Play, Plus, ShieldCheck } from "lucide-react";
+import { Pause, Play, Plus, ShieldCheck, ShieldAlert } from "lucide-react";
+import { MINING_MANAGER_ABI, MINING_MANAGER_ADDRESS } from "@/lib/contract";
+import { CONTRACT_DEPLOYED } from "@/lib/onchain";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -16,8 +18,46 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
+const contract = { address: MINING_MANAGER_ADDRESS, abi: MINING_MANAGER_ABI } as const;
+
+function useIsAuthorizedAdmin(address?: `0x${string}`) {
+  const { data, isLoading } = useReadContracts({
+    contracts: address
+      ? [
+          { ...contract, functionName: "owner" },
+          { ...contract, functionName: "admins", args: [address] },
+        ]
+      : [],
+    query: { enabled: !!address && CONTRACT_DEPLOYED },
+  });
+  const owner = (data?.[0]?.result as `0x${string}` | undefined) ?? undefined;
+  const isAdminMap = (data?.[1]?.result as boolean | undefined) ?? false;
+  const isOwner =
+    !!address && !!owner && address.toLowerCase() === owner.toLowerCase();
+  return { isAuthorized: isOwner || isAdminMap, owner, isLoading };
+}
+
+function Unauthorized({ address, owner }: { address?: string; owner?: string }) {
+  return (
+    <main className="mx-auto max-w-2xl px-4 py-16">
+      <div className="glass rounded-2xl border border-red-500/30 p-8 text-center">
+        <ShieldAlert className="mx-auto h-10 w-10 text-red-400" />
+        <h1 className="mt-3 font-display text-xl font-semibold">Access denied</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          The admin panel is restricted to the on-chain contract owner and approved admin wallets.
+        </p>
+        <div className="mt-4 space-y-1 font-mono text-[11px] text-muted-foreground">
+          {address && <div>You: {address}</div>}
+          {owner && <div>Owner: {owner}</div>}
+        </div>
+      </div>
+    </main>
+  );
+}
+
 function Admin() {
   const { address } = useAccount();
+  const { isAuthorized, owner, isLoading: authLoading } = useIsAuthorizedAdmin(address);
   const [pool, setPool] = useState<PoolState>(() => adminReadPool());
   const [rewardBps, setRewardBps] = useState(pool.rewardBps);
   const [emissionBps, setEmissionBps] = useState(pool.dailyEmissionBps);
@@ -25,9 +65,10 @@ function Admin() {
   const [fund, setFund] = useState("");
 
   useEffect(() => {
+    if (!isAuthorized) return;
     const t = setInterval(() => setPool(adminReadPool()), 2000);
     return () => clearInterval(t);
-  }, []);
+  }, [isAuthorized]);
 
   useEffect(() => {
     setRewardBps(pool.rewardBps);
@@ -43,6 +84,29 @@ function Admin() {
       </main>
     );
   }
+
+  if (!CONTRACT_DEPLOYED) {
+    return (
+      <main className="mx-auto max-w-2xl px-4 py-16 text-center">
+        <p className="text-sm text-muted-foreground">
+          Contract not deployed. Admin panel unavailable.
+        </p>
+      </main>
+    );
+  }
+
+  if (authLoading) {
+    return (
+      <main className="mx-auto max-w-2xl px-4 py-16 text-center">
+        <p className="text-sm text-muted-foreground">Verifying admin permissions…</p>
+      </main>
+    );
+  }
+
+  if (!isAuthorized) {
+    return <Unauthorized address={address} owner={owner} />;
+  }
+
 
   const treasuryBps = 10_000 - rewardBps;
 
