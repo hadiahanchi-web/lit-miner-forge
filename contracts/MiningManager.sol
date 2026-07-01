@@ -35,6 +35,15 @@ contract MiningManager {
     uint256 public constant SENTINEL = type(uint256).max;
     uint256 public constant MAX_CLAIM_POOL_BPS = 2000;
 
+    // Anti-whale economy
+    uint256 public constant MAX_UNITS_PER_MINER = 100;      // per-wallet hard cap
+    uint256 public constant DIMINISH_THRESHOLD = 10;        // full rate up to N units
+    uint256 public constant DIMINISH_BPS = 5000;            // 50% on units above threshold
+    uint256 public constant PRICE_CURVE_NUM = 5;            // 5/4 = 1.25x per global unit
+    uint256 public constant PRICE_CURVE_DEN = 4;
+    uint256 public constant PRICE_CURVE_MAX_STEPS = 40;     // cap 1.25^n growth (~7.5kx)
+    uint256 public constant ACTION_COOLDOWN = 3;            // seconds between buy/upgrade
+
     // ---------- STATE ----------
     address public owner;
     bool public miningPaused;
@@ -53,6 +62,11 @@ contract MiningManager {
     MinerType[] public miners;
     mapping(address => Player) private players;
     address[] public playerList;
+
+    /// @notice Global units minted per miner type (drives price curve).
+    mapping(uint256 => uint256) public totalMintedPerMinerType;
+    /// @notice Last buy/upgrade timestamp per wallet (cooldown gate).
+    mapping(address => uint256) public lastActionAt;
 
     // ---------- EVENTS ----------
     event PlayerRegistered(address indexed player, address indexed referrer);
