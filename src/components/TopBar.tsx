@@ -2,7 +2,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Link } from "@tanstack/react-router";
 import { Pickaxe, Trophy, ShieldCheck, ShoppingBag, Gauge } from "lucide-react";
 import { useAccount, useBalance } from "wagmi";
-import { usePendingRewards, usePoolInfo } from "@/lib/onchain";
+import { useIsAdmin, usePendingRewards, usePoolInfo } from "@/lib/onchain";
 import { fmtBig } from "@/lib/bigformat";
 
 export function TopBar() {
@@ -10,6 +10,7 @@ export function TopBar() {
   const { data: bal } = useBalance({ address, query: { refetchInterval: 5000 } });
   const { pending } = usePendingRewards();
   const { rewardPool, treasury } = usePoolInfo();
+  const { isAdmin } = useIsAdmin();
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/5 bg-background/60 backdrop-blur-xl">
