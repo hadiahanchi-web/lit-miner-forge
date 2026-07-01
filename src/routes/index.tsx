@@ -10,10 +10,25 @@ import { ReferralPanel } from "@/components/ReferralPanel";
 import { AchievementsPanel } from "@/components/AchievementsPanel";
 import { DailyRewards } from "@/components/DailyRewards";
 import { PoolHealth } from "@/components/PoolHealth";
-import { MINERS, WITHDRAW_THRESHOLD, playerLevel } from "@/lib/miners";
+import {
+  MINERS,
+  WITHDRAW_THRESHOLD,
+  playerLevel,
+  DURABILITY_MAX,
+  WALLET_ENERGY_MAX,
+} from "@/lib/miners";
 import { useMiningState } from "@/lib/mining-state";
 import { fmtZk } from "@/lib/format";
-import { BatteryCharging, CircuitBoard, Coins, Flame, Gauge, Wallet2 } from "lucide-react";
+import {
+  BatteryCharging,
+  CircuitBoard,
+  Coins,
+  Flame,
+  Gauge,
+  Wallet2,
+  Wrench,
+  Zap,
+} from "lucide-react";
 
 const MiningScene = lazy(() =>
   import("@/components/MiningScene").then((m) => ({ default: m.MiningScene })),
@@ -22,11 +37,11 @@ const MiningScene = lazy(() =>
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "LiteMiner — zkLTC mining on LitVM LiteForge" },
+      { title: "LiteMiner — sustainable zkLTC mining on LitVM LiteForge" },
       {
         name: "description",
         content:
-          "Buy virtual mining rigs with zkLTC, upgrade them, earn dynamic rewards, complete daily missions, and refer friends on the LitVM LiteForge testnet.",
+          "Buy virtual mining rigs with zkLTC, manage energy and durability, and earn from a daily reward budget on the LitVM LiteForge testnet.",
       },
     ],
   }),
@@ -53,11 +68,15 @@ function Index() {
     baseRatePerSecond,
     poolHealth: health,
     emissionMultiplier: emission,
+    epochCapRemaining,
+    epochBudgetRemaining,
+    epochBudget,
     register,
     buyMiner,
     upgradeMiner,
     claim,
-    rechargeAll,
+    repairAll,
+    refillEnergy,
     openChest,
     spin,
   } = useMiningState(address);
@@ -77,6 +96,8 @@ function Index() {
   const efficiency = maxDailyRate > 0 ? Math.round((dailyRate / maxDailyRate) * 100) : 100;
   const canClaim = livePending >= WITHDRAW_THRESHOLD;
   const level = playerLevel(player?.totalInvested ?? 0);
+  const walletEnergyPct = Math.round(((player?.walletEnergy ?? 0) / WALLET_ENERGY_MAX) * 100);
+  const budgetPct = epochBudget > 0 ? Math.round((epochBudgetRemaining / epochBudget) * 100) : 100;
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6">
@@ -91,7 +112,7 @@ function Index() {
           >
             <MiningScene
               minerCounts={player?.minerCounts ?? MINERS.map(() => 0)}
-              running={totalMiners > 0 && emission > 0}
+              running={totalMiners > 0 && emission > 0 && (player?.walletEnergy ?? 0) > 0}
             />
           </Suspense>
           <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4">
@@ -134,8 +155,11 @@ function Index() {
             dailyRate={dailyRate}
             efficiency={efficiency}
             level={level}
+            walletEnergyPct={walletEnergyPct}
+            uptimeSec={player?.uptimeSec ?? 0}
+            epochCapRemaining={epochCapRemaining}
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => {
                 try {
@@ -148,44 +172,60 @@ function Index() {
                 }
               }}
               disabled={!canClaim}
-              className="btn-neon-orange rounded-2xl px-4 py-3 text-sm"
+              className="btn-neon-orange col-span-3 rounded-2xl px-4 py-3 text-sm"
             >
               {canClaim ? `Claim ${fmtZk(livePending, 6)}` : `Min ${WITHDRAW_THRESHOLD} zkLTC`}
             </button>
             <button
               onClick={() => {
                 try {
-                  const cost = rechargeAll();
-                  toast.success("Rigs recharged", { description: `-${fmtZk(cost, 5)} zkLTC` });
+                  const cost = repairAll();
+                  toast.success("Rigs repaired", { description: `-${fmtZk(cost, 5)} zkLTC` });
                 } catch (e) {
                   toast.error((e as Error).message);
                 }
               }}
-              className="inline-flex items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold transition hover:bg-white/10"
+              className="inline-flex items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs font-semibold transition hover:bg-white/10"
             >
-              <BatteryCharging className="h-3.5 w-3.5 neon-blue" /> Recharge
+              <Wrench className="h-3.5 w-3.5 neon-blue" /> Repair
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  const cost = refillEnergy();
+                  toast.success("Energy refilled", { description: `-${fmtZk(cost, 5)} zkLTC` });
+                } catch (e) {
+                  toast.error((e as Error).message);
+                }
+              }}
+              className="inline-flex items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs font-semibold transition hover:bg-white/10"
+            >
+              <BatteryCharging className="h-3.5 w-3.5 neon-orange" /> Energy
+            </button>
+            <button
+              disabled
+              className="inline-flex items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-[10px] font-semibold text-muted-foreground"
+            >
+              <Zap className="h-3.5 w-3.5" /> {walletEnergyPct}%
             </button>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <PoolStat label="Reward Pool" value={fmtZk(pool.rewardPool, 2)} icon={<Coins />} />
             <PoolStat label="Treasury" value={fmtZk(pool.treasury, 2)} icon={<Flame />} />
-            <PoolStat
-              label="Total Deposits"
-              value={fmtZk(pool.totalDeposits, 2)}
-              icon={<Wallet2 />}
-            />
-            <PoolStat
-              label="Distributed"
-              value={fmtZk(pool.totalDistributed, 2)}
-              icon={<Gauge />}
-            />
+            <PoolStat label="Daily Budget" value={`${budgetPct}%`} icon={<Gauge />} />
+            <PoolStat label="Deposits" value={fmtZk(pool.totalDeposits, 2)} icon={<Wallet2 />} />
           </div>
         </div>
       </section>
 
       {/* Health + Daily engagement */}
       <section className="mt-6 grid gap-3 md:grid-cols-3">
-        <PoolHealth health={health} emission={emission} />
+        <PoolHealth
+          health={health}
+          emission={emission}
+          budgetRemaining={epochBudgetRemaining}
+          budgetTotal={epochBudget}
+        />
         <MissionsPanel player={player} />
         <DailyRewards player={player} openChest={openChest} spin={spin} />
       </section>
@@ -201,7 +241,7 @@ function Index() {
           <CircuitBoard className="h-4 w-4 text-sky-400" />
           <h2 className="font-display text-lg font-semibold">Rig Marketplace</h2>
           <div className="text-xs text-muted-foreground">
-            · Balanced exponential upgrades · +25% rate per level · Unlock tiers in order
+            · +25% rate / level · Durability drains with use · Repair required
           </div>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
@@ -211,7 +251,7 @@ function Index() {
               miner={m}
               owned={player?.minerCounts[m.id] ?? 0}
               level={player?.minerLevels[m.id] ?? 0}
-              energy={player?.minerEnergy[m.id] ?? m.energyCapacity}
+              durability={player?.minerDurability[m.id] ?? DURABILITY_MAX}
               player={player}
               balance={balance}
               onBuy={buyMiner}
@@ -237,16 +277,16 @@ function ConnectGate() {
         <div className="mx-auto mb-4 h-14 w-14 rounded-2xl bg-gradient-to-br from-sky-400 to-orange-500 shadow-lg shadow-sky-500/30 animate-pulse-glow" />
         <h1 className="font-display text-3xl font-bold">Enter the LiteForge</h1>
         <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-          Connect a wallet on chain <span className="font-mono neon-blue">4441</span> to spin up
-          your first zkLTC rig — start from just 0.01 zkLTC.
+          Connect a wallet on chain <span className="font-mono neon-blue">4441</span> and start
+          mining zkLTC from just 0.01 zkLTC — with a sustainable daily reward budget and per-wallet caps.
         </p>
         <div className="mt-6 inline-flex">
           <ConnectButton />
         </div>
         <div className="mt-6 grid grid-cols-3 gap-2 text-left">
-          <Feat title="Low entry" body="Basic USB Miner from 0.01 zkLTC" />
-          <Feat title="Dynamic yield" body="Auto-throttles to keep pool solvent" />
-          <Feat title="Refer & earn" body="5% referral bonus + achievements" />
+          <Feat title="Daily budget" body="5% of pool per epoch — no runaway inflation" />
+          <Feat title="Energy & repair" body="Durability, wallet energy, cooldowns" />
+          <Feat title="Fair caps" body="1% of daily budget per wallet · 1 claim / epoch" />
         </div>
       </div>
     </main>
@@ -271,6 +311,9 @@ function PlayerPanel({
   dailyRate,
   efficiency,
   level,
+  walletEnergyPct,
+  uptimeSec,
+  epochCapRemaining,
 }: {
   balance: number;
   pending: number;
@@ -280,7 +323,11 @@ function PlayerPanel({
   dailyRate: number;
   efficiency: number;
   level: number;
+  walletEnergyPct: number;
+  uptimeSec: number;
+  epochCapRemaining: number;
 }) {
+  const uptimeHrs = (uptimeSec / 3600).toFixed(1);
   return (
     <div className="glass rounded-2xl p-4">
       <div className="flex items-center justify-between">
@@ -293,11 +340,32 @@ function PlayerPanel({
         <div className="font-display text-3xl font-bold">{miners}</div>
         <div className="text-xs text-muted-foreground">active miners</div>
       </div>
+      {/* Wallet energy bar */}
+      <div className="mt-3">
+        <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1"><Zap className="h-3 w-3" /> Wallet energy</span>
+          <span className="font-mono">{walletEnergyPct}%</span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
+          <div
+            className="h-full transition-all"
+            style={{
+              width: `${walletEnergyPct}%`,
+              background:
+                walletEnergyPct > 40
+                  ? "linear-gradient(90deg,#38bdf8,#22d3ee)"
+                  : "linear-gradient(90deg,#f97316,#ef4444)",
+            }}
+          />
+        </div>
+      </div>
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
         <Row label="Balance" value={`${fmtZk(balance, 4)} zkLTC`} />
         <Row label="Pending" value={`${fmtZk(pending, 6)}`} accent="orange" mono />
         <Row label="Est. daily" value={fmtZk(dailyRate, 5)} accent="blue" mono />
         <Row label="Efficiency" value={`${efficiency}%`} accent={efficiency >= 75 ? "blue" : "orange"} mono />
+        <Row label="Uptime" value={`${uptimeHrs} h`} mono />
+        <Row label="Epoch cap left" value={fmtZk(epochCapRemaining, 5)} accent="orange" mono />
         <Row label="Lifetime" value={fmtZk(lifetime, 4)} mono />
         <Row label="Invested" value={fmtZk(invested, 2)} mono />
       </div>
