@@ -1,14 +1,14 @@
-import { MINERS, WITHDRAW_THRESHOLD, MAX_LEVEL, upgradeCost, levelMultiplier } from "@/lib/miners";
+import { MINERS, WITHDRAW_THRESHOLD, MAX_LEVEL, upgradeCost, levelMultiplier, DURABILITY_MAX, tierEfficiency } from "@/lib/miners";
 import { isMinerUnlocked, type PlayerState } from "@/lib/mining-state";
 import { fmtZk } from "@/lib/format";
-import { ChevronUp, Lock, Zap } from "lucide-react";
+import { ChevronUp, Lock, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
   miner: (typeof MINERS)[number];
   owned: number;
   level: number;
-  energy: number;
+  durability: number;
   player: PlayerState | null;
   balance: number;
   onBuy: (id: number) => void;
@@ -20,7 +20,7 @@ export function MinerCard({
   miner,
   owned,
   level,
-  energy,
+  durability,
   player,
   balance,
   onBuy,
@@ -35,7 +35,8 @@ export function MinerCard({
   const upCost = level > 0 ? upgradeCost(miner.id, level) : 0;
   const nextRate = miner.ratePerDay * owned * levelMultiplier(level + 1);
   const canUpgrade = level > 0 && level < MAX_LEVEL && balance >= upCost;
-  const energyPct = owned > 0 ? Math.round((energy / miner.energyCapacity) * 100) : 100;
+  const durabilityPct = owned > 0 ? Math.round((durability / DURABILITY_MAX) * 100) : 100;
+  const eff = tierEfficiency(miner.id);
 
   return (
     <div
@@ -49,7 +50,7 @@ export function MinerCard({
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            Tier {miner.id} · {miner.tier}
+            Tier {miner.id} · {miner.tier} · Eff {eff.toFixed(1)}×
           </div>
           <div className="font-display text-lg font-semibold">{miner.name}</div>
         </div>
@@ -83,22 +84,27 @@ export function MinerCard({
         <div className="mt-3">
           <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
             <span className="inline-flex items-center gap-1">
-              <Zap className="h-3 w-3" /> Energy
+              <Wrench className="h-3 w-3" /> Durability
             </span>
-            <span className="font-mono">{energyPct}%</span>
+            <span className="font-mono">{durabilityPct}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
             <div
               className="h-full transition-all"
               style={{
-                width: `${energyPct}%`,
+                width: `${durabilityPct}%`,
                 background:
-                  energyPct > 40
+                  durabilityPct > 40
                     ? "linear-gradient(90deg,#38bdf8,#22d3ee)"
-                    : "linear-gradient(90deg,#f97316,#ef4444)",
+                    : durabilityPct > 15
+                      ? "linear-gradient(90deg,#f59e0b,#f97316)"
+                      : "linear-gradient(90deg,#ef4444,#f43f5e)",
               }}
             />
           </div>
+          {durabilityPct === 0 && (
+            <div className="mt-1 text-[10px] text-red-300">Rig offline — repair required.</div>
+          )}
         </div>
       )}
 
