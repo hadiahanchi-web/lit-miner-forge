@@ -200,8 +200,8 @@ function Index() {
                 <div className="mt-1 font-display text-lg font-semibold">Miner #{m.id}</div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
                   <Row label="Live price" value={`${fmtBig(m.price, 4)} zkLTC`} accent="blue" mono />
-                  <Row label="Rate/sec" value={fmtBig(m.ratePerSecond, 8)} mono />
-                  <Row label="Rate/day" value={fmtBig(m.ratePerSecond * 86400n, 6)} accent="orange" mono />
+                  <Row label="Rate/sec" value={fmtBig((m.ratePerSecond * emissionBps) / 10000n, 8)} mono />
+                  <Row label="Rate/day" value={fmtBig((m.ratePerSecond * emissionBps * 86400n) / 10000n, 6)} accent="orange" mono />
                   <Row label="Minted" value={m.totalMintedGlobal.toString()} mono />
                 </div>
                 <Link
