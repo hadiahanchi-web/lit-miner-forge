@@ -1,60 +1,46 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useAccount } from "wagmi";
-import { useLeaderboard } from "@/lib/mining-state";
-import { playerLevel } from "@/lib/miners";
-import { fmtZk, shortAddr } from "@/lib/format";
-import { Trophy } from "lucide-react";
+import { Trophy, Loader2 } from "lucide-react";
+
+import { useBlockRefetch, useLeaderboard, CONTRACT_DEPLOYED } from "@/lib/onchain";
+import { fmtBig } from "@/lib/bigformat";
+import { shortAddr } from "@/lib/format";
 
 export const Route = createFileRoute("/leaderboard")({
   head: () => ({
     meta: [
       { title: "Leaderboard — LiteMiner" },
-      { name: "description", content: "Top zkLTC miners ranked by efficiency, uptime, and lifetime rewards on the LitVM LiteForge testnet." },
+      {
+        name: "description",
+        content:
+          "Top zkLTC miners on the LitVM LiteForge testnet — ranked live from the MiningManager contract.",
+      },
     ],
   }),
   component: Leaderboard,
 });
 
-type SortKey = "efficiencyPct" | "uptimeSec" | "activeDays" | "streakDays" | "contribution" | "power" | "claimed" | "invested" | "minerCount" | "level";
+type SortKey = "lifetimeRewards" | "totalInvested" | "ratePerSecond" | "minerCount";
 const SORT_LABEL: Record<SortKey, string> = {
-  efficiencyPct: "Efficiency (ROI %)",
-  uptimeSec: "Uptime",
-  activeDays: "Consistency (days)",
-  streakDays: "Streak",
-  contribution: "Contribution",
-  power: "Mining power",
-  claimed: "Lifetime rewards",
-  invested: "Investment",
+  lifetimeRewards: "Lifetime rewards",
+  totalInvested: "Total invested",
+  ratePerSecond: "Mining power",
   minerCount: "Miner count",
-  level: "Player level",
 };
 
-
 function Leaderboard() {
-  const rows = useLeaderboard();
+  useBlockRefetch();
   const { address } = useAccount();
-  const [sort, setSort] = useState<SortKey>("efficiencyPct");
+  const { rows, isLoading, playersCount } = useLeaderboard();
+  const [sort, setSort] = useState<SortKey>("lifetimeRewards");
 
-  const enriched = useMemo(() => {
-    return [...rows]
-      .map((r) => ({
-        address: r.address,
-        minerCount: r.minerCount,
-        power: r.power,
-        claimed: r.lifetimeRewards,
-        invested: r.totalInvested,
-        referrals: r.referrals.length,
-        level: playerLevel(r.totalInvested),
-        efficiencyPct: r.efficiencyPct,
-        avgHwEfficiency: r.avgHwEfficiency,
-        uptimeSec: r.uptimeSec,
-        activeDays: r.activeDays,
-        streakDays: r.streakDays,
-        contribution: r.contribution,
-      }))
-
-      .sort((a, b) => (b[sort] as number) - (a[sort] as number));
+  const sorted = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      const av = a[sort];
+      const bv = b[sort];
+      return bv > av ? 1 : bv < av ? -1 : 0;
+    });
   }, [rows, sort]);
 
   return (
@@ -63,6 +49,9 @@ function Leaderboard() {
         <div className="flex items-center gap-2">
           <Trophy className="h-5 w-5 neon-orange" />
           <h1 className="font-display text-2xl font-bold">Leaderboard</h1>
+          <span className="ml-2 rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] uppercase tracking-widest neon-blue">
+            {playersCount} on-chain players
+          </span>
         </div>
         <div className="flex flex-wrap gap-1 rounded-xl border border-white/10 bg-black/30 p-1">
           {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
@@ -81,35 +70,41 @@ function Leaderboard() {
         </div>
       </div>
 
+      {!CONTRACT_DEPLOYED && (
+        <div className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+          Contract not deployed. Update <code>src/lib/contract.ts</code>.
+        </div>
+      )}
+
       <div className="glass overflow-hidden rounded-2xl">
         <table className="w-full text-sm">
           <thead className="bg-white/5 text-[10px] uppercase tracking-widest text-muted-foreground">
             <tr>
               <th className="px-4 py-3 text-left">#</th>
               <th className="px-4 py-3 text-left">Wallet</th>
-              <th className="px-4 py-3 text-right">Lv</th>
               <th className="px-4 py-3 text-right">Miners</th>
-              <th className="px-4 py-3 text-right">HW Eff</th>
-              <th className="px-4 py-3 text-right">ROI %</th>
-              <th className="px-4 py-3 text-right">Uptime (h)</th>
-              <th className="px-4 py-3 text-right">Days</th>
-              <th className="px-4 py-3 text-right">Streak</th>
-              <th className="px-4 py-3 text-right">Power / day</th>
-              <th className="px-4 py-3 text-right">Claimed</th>
-              <th className="px-4 py-3 text-right">Contrib.</th>
-              <th className="px-4 py-3 text-right">Refs</th>
-
+              <th className="px-4 py-3 text-right">Rate/sec</th>
+              <th className="px-4 py-3 text-right">Rate/day</th>
+              <th className="px-4 py-3 text-right">Invested</th>
+              <th className="px-4 py-3 text-right">Lifetime</th>
             </tr>
           </thead>
           <tbody>
-            {enriched.length === 0 && (
+            {isLoading && (
               <tr>
-                <td colSpan={13} className="px-4 py-12 text-center text-muted-foreground">
-                  No miners yet. Be the first to deploy a rig.
+                <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-sky-400" />
                 </td>
               </tr>
             )}
-            {enriched.map((r, i) => {
+            {!isLoading && sorted.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                  No miners on-chain yet. Be the first to deploy a rig.
+                </td>
+              </tr>
+            )}
+            {sorted.map((r, i) => {
               const me = address?.toLowerCase() === r.address.toLowerCase();
               return (
                 <tr
@@ -134,22 +129,19 @@ function Leaderboard() {
                   <td className="px-4 py-3 font-mono text-xs">
                     {shortAddr(r.address)} {me && <span className="ml-1 text-sky-400">· you</span>}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono neon-blue">{r.level}</td>
-                  <td className="px-4 py-3 text-right font-mono">{r.minerCount}</td>
-                  <td className="px-4 py-3 text-right font-mono">{r.avgHwEfficiency.toFixed(2)}×</td>
-                  <td className="px-4 py-3 text-right font-mono neon-orange">
-                    {r.efficiencyPct.toFixed(1)}%
+                  <td className="px-4 py-3 text-right font-mono">{r.minerCount.toString()}</td>
+                  <td className="px-4 py-3 text-right font-mono neon-blue">
+                    {fmtBig(r.ratePerSecond, 8)}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono">{(r.uptimeSec / 3600).toFixed(1)}</td>
-                  <td className="px-4 py-3 text-right font-mono neon-blue">{r.activeDays}</td>
-                  <td className="px-4 py-3 text-right font-mono neon-orange">{r.streakDays}🔥</td>
-                  <td className="px-4 py-3 text-right font-mono neon-blue">{fmtZk(r.power, 5)}</td>
-                  <td className="px-4 py-3 text-right font-mono neon-orange">
-                    {fmtZk(r.claimed, 4)}
+                  <td className="px-4 py-3 text-right font-mono neon-blue">
+                    {fmtBig(r.ratePerSecond * 86400n, 5)}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono">{fmtZk(r.contribution, 2)}</td>
-                  <td className="px-4 py-3 text-right font-mono">{r.referrals}</td>
-
+                  <td className="px-4 py-3 text-right font-mono">
+                    {fmtBig(r.totalInvested, 3)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono neon-orange">
+                    {fmtBig(r.lifetimeRewards, 4)}
+                  </td>
                 </tr>
               );
             })}
