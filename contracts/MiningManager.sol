@@ -35,6 +35,15 @@ contract MiningManager {
     uint256 public constant SENTINEL = type(uint256).max;
     uint256 public constant MAX_CLAIM_POOL_BPS = 2000;
 
+    // Anti-whale economy
+    uint256 public constant MAX_UNITS_PER_MINER = 100;      // per-wallet hard cap
+    uint256 public constant DIMINISH_THRESHOLD = 10;        // full rate up to N units
+    uint256 public constant DIMINISH_BPS = 5000;            // 50% on units above threshold
+    uint256 public constant PRICE_CURVE_NUM = 5;            // 5/4 = 1.25x per global unit
+    uint256 public constant PRICE_CURVE_DEN = 4;
+    uint256 public constant PRICE_CURVE_MAX_STEPS = 40;     // cap 1.25^n growth (~7.5kx)
+    uint256 public constant ACTION_COOLDOWN = 3;            // seconds between buy/upgrade
+
     // ---------- STATE ----------
     address public owner;
     bool public miningPaused;
@@ -53,6 +62,11 @@ contract MiningManager {
     MinerType[] public miners;
     mapping(address => Player) private players;
     address[] public playerList;
+
+    /// @notice Global units minted per miner type (drives price curve).
+    mapping(uint256 => uint256) public totalMintedPerMinerType;
+    /// @notice Last buy/upgrade timestamp per wallet (cooldown gate).
+    mapping(address => uint256) public lastActionAt;
 
     // ---------- EVENTS ----------
     event PlayerRegistered(address indexed player, address indexed referrer);
@@ -105,14 +119,36 @@ contract MiningManager {
         p.lastUpdate = block.timestamp;
     }
 
+
+    // ---------- PRICING (anti-whale curve) ----------
+    /// @notice Dynamic price = basePrice * (1.25 ^ min(globalMinted, CAP)).
+    ///         Global demand acts as a supply sink; steps capped to bound gas
+    ///         and prevent overflow. Once cap hit, price plateaus at top.
+    function currentPrice(uint256 id) public view returns (uint256) {
+        require(id < miners.length, "bad id");
+        uint256 k = totalMintedPerMinerType[id];
+        if (k > PRICE_CURVE_MAX_STEPS) k = PRICE_CURVE_MAX_STEPS;
+        uint256 price = miners[id].price;
+        for (uint256 i = 0; i < k; i++) {
+            price = (price * PRICE_CURVE_NUM) / PRICE_CURVE_DEN;
+        }
+        return price;
+    }
+
     // ---------- BUY ----------
     function buyMiner(uint256 id) external payable nonReentrant {
         require(!miningPaused, "paused");
         require(id < miners.length, "bad id");
+        require(
+            block.timestamp >= lastActionAt[msg.sender] + ACTION_COOLDOWN,
+            "cooldown"
+        );
 
         MinerType memory m = miners[id];
         require(m.active, "inactive");
-        require(msg.value == m.price, "bad price");
+
+        uint256 price = currentPrice(id);
+        require(msg.value == price, "bad price");
 
         Player storage p = players[msg.sender];
 
@@ -125,12 +161,19 @@ contract MiningManager {
         _accrue(p);
 
         if (p.minerCounts.length <= id) {
-            p.minerCounts.push(0);
-            p.minerLevels.push(0);
+            while (p.minerCounts.length <= id) {
+                p.minerCounts.push(0);
+                p.minerLevels.push(0);
+            }
         }
+
+        require(p.minerCounts[id] < MAX_UNITS_PER_MINER, "wallet cap");
 
         p.minerCounts[id] += 1;
         if (p.minerLevels[id] == 0) p.minerLevels[id] = 1;
+
+        totalMintedPerMinerType[id] += 1;
+        lastActionAt[msg.sender] = block.timestamp;
 
         p.totalInvested += msg.value;
         _recomputeRate(p);
@@ -140,18 +183,28 @@ contract MiningManager {
 
         rewardPool += toPool;
         treasury += toTreasury;
+
+        emit MinerPurchased(msg.sender, id, msg.value);
     }
 
-    // ---------- RATE ----------
+    // ---------- RATE (with diminishing returns) ----------
+    /// @notice Units 1..DIMINISH_THRESHOLD contribute 100% rate; units above
+    ///         contribute only DIMINISH_BPS (50%). Prevents linear stacking.
+    function _effectiveUnitsBps(uint256 n) internal pure returns (uint256) {
+        if (n == 0) return 0;
+        if (n <= DIMINISH_THRESHOLD) return n * 10_000;
+        return DIMINISH_THRESHOLD * 10_000 + (n - DIMINISH_THRESHOLD) * DIMINISH_BPS;
+    }
+
     function _recomputeRate(Player storage p) internal {
         uint256 total;
 
         for (uint256 i = 0; i < miners.length; i++) {
             if (i >= p.minerCounts.length) break;
-            if (p.minerCounts[i] == 0) continue;
+            uint256 n = p.minerCounts[i];
+            if (n == 0) continue;
 
-            uint256 base = miners[i].ratePerSecond * p.minerCounts[i];
-            total += base;
+            total += (miners[i].ratePerSecond * _effectiveUnitsBps(n)) / 10_000;
         }
 
         p.ratePerSecond = total;
