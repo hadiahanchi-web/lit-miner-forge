@@ -115,8 +115,8 @@ function DashboardPage() {
           value={`${fmtBig(player?.lifetimeRewards ?? 0n, 4)} zkLTC`} />
       </section>
 
-      <section className="mt-4 grid gap-4 lg:grid-cols-3">
-        <div className="glass rounded-2xl p-5 lg:col-span-2">
+      <section className={`mt-4 grid gap-4 ${isAdmin ? "lg:grid-cols-3" : ""}`}>
+        <div className={`glass rounded-2xl p-5 ${isAdmin ? "lg:col-span-2" : ""}`}>
           <h2 className="font-display text-lg font-semibold">Claim Rewards</h2>
           <p className="text-xs text-muted-foreground">
             Threshold, pool cap and maintenance fee are enforced by the contract.
