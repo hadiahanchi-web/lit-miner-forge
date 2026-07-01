@@ -57,15 +57,24 @@ contract MiningManager {
     mapping(uint256 => uint256) public totalMinted;
     mapping(address => uint256) public lastAction;
 
+    mapping(address => bool) public admins;
+
     // ---------- EVENTS (UI CRITICAL) ----------
     event PlayerRegistered(address indexed player);
     event MinerPurchased(address indexed player, uint256 indexed id, uint256 price);
     event RewardsClaimed(address indexed player, uint256 gross, uint256 net, uint256 fee);
     event PoolUpdated(uint256 rewardPool, uint256 treasury);
+    event AdminAdded(address indexed admin, address indexed by);
+    event AdminRemoved(address indexed admin, address indexed by);
 
     // ---------- MODIFIERS ----------
     modifier onlyOwner() {
         require(msg.sender == owner, "not owner");
+        _;
+    }
+
+    modifier onlyAdmin() {
+        require(msg.sender == owner || admins[msg.sender], "not admin");
         _;
     }
 
@@ -78,6 +87,9 @@ contract MiningManager {
 
     constructor() {
         owner = msg.sender;
+        admins[msg.sender] = true;
+        emit AdminAdded(msg.sender, msg.sender);
+
 
         _addMiner(1e16, 1e12, type(uint256).max, 0);
         _addMiner(1 ether, 1e14, 0, 0);
