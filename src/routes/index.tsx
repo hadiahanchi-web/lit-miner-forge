@@ -43,6 +43,8 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   useBlockRefetch();
   const { address, isConnected } = useAccount();
   const { data: bal } = useBalance({ address, query: { refetchInterval: 5000 } });
@@ -51,6 +53,7 @@ function Index() {
   const { miners } = useMiners();
   const { rewardPool, treasury, miningPaused, emissionBps } = usePoolInfo();
 
+  if (!mounted) return <ConnectGate ssrPlaceholder />;
   if (!isConnected || !address) return <ConnectGate />;
 
   const minerCounts = (player?.minerCounts ?? []).map((n) => Number(n));
