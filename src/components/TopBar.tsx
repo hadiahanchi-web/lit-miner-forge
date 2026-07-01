@@ -41,8 +41,8 @@ export function TopBar() {
           <div className="hidden items-center gap-2 sm:flex">
             <Stat label="Balance" value={`${fmtBig(bal?.value ?? 0n, 3)} zkLTC`} />
             <Stat label="Pending" value={`${fmtBig(pending, 4)} zkLTC`} accent="orange" />
-            <Stat label="Pool" value={`${fmtBig(rewardPool, 2)}`} />
-            <Stat label="Treasury" value={`${fmtBig(treasury, 2)}`} />
+            {isAdmin && <Stat label="Pool" value={`${fmtBig(rewardPool, 2)}`} />}
+            {isAdmin && <Stat label="Treasury" value={`${fmtBig(treasury, 2)}`} />}
           </div>
           <ConnectButton
             chainStatus={{ smallScreen: "icon", largeScreen: "full" }}
