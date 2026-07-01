@@ -87,7 +87,12 @@ export interface PlayerState {
   totalClaims: number;
   totalRepairs: number;
   achievements: string[];
+  // consistency
+  activeDays: number;         // unique UTC days with any action
+  lastActiveDate?: string;    // YYYY-MM-DD
+  streakDays: number;         // consecutive active days
 }
+
 
 export interface PoolState {
   rewardPool: number;
