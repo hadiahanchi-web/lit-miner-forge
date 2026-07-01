@@ -52,6 +52,7 @@ function DashboardPage() {
     maintenanceBps,
     emissionBps,
   } = usePoolInfo();
+  const { isAdmin } = useIsAdmin();
 
   // Contract-derived claim math (view-only mirror of claimRewards logic)
   const poolCap = (rewardPool * maxClaimPoolBps) / 10_000n;
