@@ -7,10 +7,13 @@ import { toast } from "sonner";
 import { MinerCard } from "@/components/MinerCard";
 import { MissionsPanel } from "@/components/MissionsPanel";
 import { ReferralPanel } from "@/components/ReferralPanel";
-import { MINERS, WITHDRAW_THRESHOLD } from "@/lib/miners";
+import { AchievementsPanel } from "@/components/AchievementsPanel";
+import { DailyRewards } from "@/components/DailyRewards";
+import { PoolHealth } from "@/components/PoolHealth";
+import { MINERS, WITHDRAW_THRESHOLD, playerLevel } from "@/lib/miners";
 import { useMiningState } from "@/lib/mining-state";
 import { fmtZk } from "@/lib/format";
-import { CircuitBoard, Coins, Flame, Gauge, Wallet2 } from "lucide-react";
+import { BatteryCharging, CircuitBoard, Coins, Flame, Gauge, Wallet2 } from "lucide-react";
 
 const MiningScene = lazy(() =>
   import("@/components/MiningScene").then((m) => ({ default: m.MiningScene })),
@@ -23,7 +26,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Buy virtual mining rigs with zkLTC, upgrade them, earn rewards continuously, and refer friends on the LitVM LiteForge testnet.",
+          "Buy virtual mining rigs with zkLTC, upgrade them, earn dynamic rewards, complete daily missions, and refer friends on the LitVM LiteForge testnet.",
       },
     ],
   }),
@@ -47,10 +50,16 @@ function Index() {
     pool,
     livePending,
     ratePerSecond,
+    baseRatePerSecond,
+    poolHealth: health,
+    emissionMultiplier: emission,
     register,
     buyMiner,
     upgradeMiner,
     claim,
+    rechargeAll,
+    openChest,
+    spin,
   } = useMiningState(address);
 
   useEffect(() => {
@@ -64,7 +73,10 @@ function Index() {
 
   const totalMiners = player?.minerCounts.reduce((a, b) => a + b, 0) ?? 0;
   const dailyRate = ratePerSecond * 86_400;
+  const maxDailyRate = baseRatePerSecond * 86_400;
+  const efficiency = maxDailyRate > 0 ? Math.round((dailyRate / maxDailyRate) * 100) : 100;
   const canClaim = livePending >= WITHDRAW_THRESHOLD;
+  const level = playerLevel(player?.totalInvested ?? 0);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6">
@@ -79,16 +91,16 @@ function Index() {
           >
             <MiningScene
               minerCounts={player?.minerCounts ?? MINERS.map(() => 0)}
-              running={totalMiners > 0}
+              running={totalMiners > 0 && emission > 0}
             />
           </Suspense>
           <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4">
             <div className="glass rounded-xl px-3 py-1.5">
               <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
-                Facility
+                Facility · Lv {level}
               </div>
               <div className="font-mono text-sm font-semibold neon-blue">
-                {totalMiners} rigs online
+                {totalMiners} rigs · {efficiency}% eff
               </div>
             </div>
             <div className="glass rounded-xl px-3 py-1.5 text-right">
@@ -120,25 +132,40 @@ function Index() {
             invested={player?.totalInvested ?? 0}
             miners={totalMiners}
             dailyRate={dailyRate}
+            efficiency={efficiency}
+            level={level}
           />
-          <button
-            onClick={() => {
-              try {
-                const amount = claim();
-                toast.success("Rewards claimed", {
-                  description: `${fmtZk(amount, 6)} zkLTC → wallet`,
-                });
-              } catch (e) {
-                toast.error((e as Error).message);
-              }
-            }}
-            disabled={!canClaim}
-            className="btn-neon-orange w-full rounded-2xl px-4 py-3 text-sm"
-          >
-            {canClaim
-              ? `Claim ${fmtZk(livePending, 6)} zkLTC`
-              : `Threshold ${WITHDRAW_THRESHOLD} zkLTC — earning…`}
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => {
+                try {
+                  const { net, fee } = claim();
+                  toast.success("Rewards claimed", {
+                    description: `+${fmtZk(net, 6)} zkLTC (fee ${fmtZk(fee, 6)})`,
+                  });
+                } catch (e) {
+                  toast.error((e as Error).message);
+                }
+              }}
+              disabled={!canClaim}
+              className="btn-neon-orange rounded-2xl px-4 py-3 text-sm"
+            >
+              {canClaim ? `Claim ${fmtZk(livePending, 6)}` : `Min ${WITHDRAW_THRESHOLD} zkLTC`}
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  const cost = rechargeAll();
+                  toast.success("Rigs recharged", { description: `-${fmtZk(cost, 5)} zkLTC` });
+                } catch (e) {
+                  toast.error((e as Error).message);
+                }
+              }}
+              className="inline-flex items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold transition hover:bg-white/10"
+            >
+              <BatteryCharging className="h-3.5 w-3.5 neon-blue" /> Recharge
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <PoolStat label="Reward Pool" value={fmtZk(pool.rewardPool, 2)} icon={<Coins />} />
             <PoolStat label="Treasury" value={fmtZk(pool.treasury, 2)} icon={<Flame />} />
@@ -156,10 +183,16 @@ function Index() {
         </div>
       </section>
 
-      {/* Engagement row */}
-      <section className="mt-6 grid gap-3 md:grid-cols-2">
+      {/* Health + Daily engagement */}
+      <section className="mt-6 grid gap-3 md:grid-cols-3">
+        <PoolHealth health={health} emission={emission} />
         <MissionsPanel player={player} />
+        <DailyRewards player={player} openChest={openChest} spin={spin} />
+      </section>
+
+      <section className="mt-3 grid gap-3 md:grid-cols-2">
         <ReferralPanel address={address} player={player} />
+        <AchievementsPanel player={player} />
       </section>
 
       {/* Marketplace */}
@@ -168,16 +201,18 @@ function Index() {
           <CircuitBoard className="h-4 w-4 text-sky-400" />
           <h2 className="font-display text-lg font-semibold">Rig Marketplace</h2>
           <div className="text-xs text-muted-foreground">
-            · Upgrade any rig up to L10 for +25% rate per level · 80/20 pool split
+            · Balanced exponential upgrades · +25% rate per level · Unlock tiers in order
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           {MINERS.map((m) => (
             <MinerCard
               key={m.id}
               miner={m}
               owned={player?.minerCounts[m.id] ?? 0}
               level={player?.minerLevels[m.id] ?? 0}
+              energy={player?.minerEnergy[m.id] ?? m.energyCapacity}
+              player={player}
               balance={balance}
               onBuy={buyMiner}
               onUpgrade={upgradeMiner}
@@ -210,8 +245,8 @@ function ConnectGate() {
         </div>
         <div className="mt-6 grid grid-cols-3 gap-2 text-left">
           <Feat title="Low entry" body="Basic USB Miner from 0.01 zkLTC" />
-          <Feat title="Upgrade" body="Level rigs up to L10 · +25% each" />
-          <Feat title="Refer" body="5% referral bonus from treasury" />
+          <Feat title="Dynamic yield" body="Auto-throttles to keep pool solvent" />
+          <Feat title="Refer & earn" body="5% referral bonus + achievements" />
         </div>
       </div>
     </main>
@@ -234,6 +269,8 @@ function PlayerPanel({
   invested,
   miners,
   dailyRate,
+  efficiency,
+  level,
 }: {
   balance: number;
   pending: number;
@@ -241,10 +278,17 @@ function PlayerPanel({
   invested: number;
   miners: number;
   dailyRate: number;
+  efficiency: number;
+  level: number;
 }) {
   return (
     <div className="glass rounded-2xl p-4">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Your rigs</div>
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Your rigs</div>
+        <div className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold neon-blue">
+          Lv {level}
+        </div>
+      </div>
       <div className="mt-1 flex items-baseline gap-2">
         <div className="font-display text-3xl font-bold">{miners}</div>
         <div className="text-xs text-muted-foreground">active miners</div>
@@ -252,18 +296,10 @@ function PlayerPanel({
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
         <Row label="Balance" value={`${fmtZk(balance, 4)} zkLTC`} />
         <Row label="Pending" value={`${fmtZk(pending, 6)}`} accent="orange" mono />
-        <Row label="Rate / day" value={fmtZk(dailyRate, 5)} accent="blue" mono />
+        <Row label="Est. daily" value={fmtZk(dailyRate, 5)} accent="blue" mono />
+        <Row label="Efficiency" value={`${efficiency}%`} accent={efficiency >= 75 ? "blue" : "orange"} mono />
         <Row label="Lifetime" value={fmtZk(lifetime, 4)} mono />
         <Row label="Invested" value={fmtZk(invested, 2)} mono />
-        <Row
-          label="Next claim"
-          value={
-            dailyRate > 0
-              ? `${Math.max(0, (WITHDRAW_THRESHOLD - pending) / (dailyRate / 86400) / 3600).toFixed(1)}h`
-              : "—"
-          }
-          mono
-        />
       </div>
     </div>
   );

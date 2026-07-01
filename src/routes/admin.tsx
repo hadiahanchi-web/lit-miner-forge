@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
-import { adminReadPool, adminUpdate, type PoolState } from "@/lib/mining-state";
+import { adminFundPool, adminReadPool, adminUpdate, type PoolState } from "@/lib/mining-state";
 import { fmtZk } from "@/lib/format";
 import { toast } from "sonner";
-import { Pause, Play, ShieldCheck } from "lucide-react";
+import { Pause, Play, Plus, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -20,6 +20,7 @@ function Admin() {
   const { address } = useAccount();
   const [pool, setPool] = useState<PoolState>(() => adminReadPool());
   const [rewardBps, setRewardBps] = useState(pool.rewardBps);
+  const [fund, setFund] = useState("");
 
   useEffect(() => {
     const t = setInterval(() => setPool(adminReadPool()), 2000);
@@ -68,7 +69,9 @@ function Admin() {
             />
             <div className="mt-2 flex justify-between text-xs">
               <span className="neon-blue font-mono">Pool {(rewardBps / 100).toFixed(0)}%</span>
-              <span className="neon-orange font-mono">Treasury {(treasuryBps / 100).toFixed(0)}%</span>
+              <span className="neon-orange font-mono">
+                Treasury {(treasuryBps / 100).toFixed(0)}%
+              </span>
             </div>
           </div>
           <button
@@ -107,6 +110,52 @@ function Admin() {
           </div>
         </div>
 
+        <div className="glass rounded-2xl p-5">
+          <h2 className="font-display text-sm font-semibold">Fund Reward Pool</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Top up the Reward Pool to restore emissions to 100%.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={fund}
+              onChange={(e) => setFund(e.target.value)}
+              placeholder="Amount (zkLTC)"
+              className="flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm font-mono outline-none placeholder:text-muted-foreground focus:border-sky-500/60"
+            />
+            <button
+              onClick={() => {
+                const n = Number(fund);
+                if (!isFinite(n) || n <= 0) {
+                  toast.error("Enter a positive amount");
+                  return;
+                }
+                adminFundPool(n);
+                setFund("");
+                toast.success(`Funded ${n} zkLTC to Reward Pool`);
+              }}
+              className="btn-neon inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm"
+            >
+              <Plus className="h-3.5 w-3.5" /> Fund
+            </button>
+          </div>
+        </div>
+
+        <div className="glass rounded-2xl p-5">
+          <h2 className="font-display text-sm font-semibold">Owner utilities</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Additional owner-only actions available on the on-chain contract.
+          </p>
+          <ul className="mt-3 space-y-1.5 text-xs text-muted-foreground">
+            <li>· <span className="font-mono neon-blue">addMiner(price, rate)</span> — publish a new tier</li>
+            <li>· <span className="font-mono neon-blue">updateMiner(id, ...)</span> — retune an existing tier</li>
+            <li>· <span className="font-mono neon-blue">withdrawTreasury(to, amt)</span></li>
+            <li>· <span className="font-mono neon-blue">fundRewardPool()</span> payable</li>
+          </ul>
+        </div>
+
         <div className="glass rounded-2xl p-5 md:col-span-2">
           <h2 className="font-display text-sm font-semibold">Protocol statistics</h2>
           <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
@@ -117,12 +166,12 @@ function Admin() {
             <Stat label="Players" value={String(pool.players.length)} />
             <Stat label="Reward BPS" value={String(pool.rewardBps)} />
             <Stat label="Treasury BPS" value={String(pool.treasuryBps)} />
-            <Stat label="Status" value={pool.paused ? "PAUSED" : "LIVE"} accent={pool.paused ? "orange" : "blue"} />
+            <Stat
+              label="Status"
+              value={pool.paused ? "PAUSED" : "LIVE"}
+              accent={pool.paused ? "orange" : "blue"}
+            />
           </div>
-          <p className="mt-4 text-[11px] text-muted-foreground">
-            Miner catalogue (types, prices, rates) lives in <code className="font-mono">src/lib/miners.ts</code>.
-            When the on-chain MiningManager is deployed, admin actions here will emit real transactions via wagmi.
-          </p>
         </div>
       </div>
     </main>
