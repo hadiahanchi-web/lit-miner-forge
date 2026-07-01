@@ -56,25 +56,19 @@ contract MiningManager {
 
     mapping(uint256 => uint256) public totalMinted;
     mapping(address => uint256) public lastAction;
-
     mapping(address => bool) public admins;
 
-    // ---------- EVENTS (UI CRITICAL) ----------
+    // ---------- EVENTS ----------
     event PlayerRegistered(address indexed player);
     event MinerPurchased(address indexed player, uint256 indexed id, uint256 price);
     event RewardsClaimed(address indexed player, uint256 gross, uint256 net, uint256 fee);
     event PoolUpdated(uint256 rewardPool, uint256 treasury);
-    event AdminAdded(address indexed admin, address indexed by);
-    event AdminRemoved(address indexed admin, address indexed by);
+    event AdminAdded(address indexed newAdmin, address indexed addedBy);
+    event AdminRemoved(address indexed admin, address indexed removedBy);
 
     // ---------- MODIFIERS ----------
     modifier onlyOwner() {
         require(msg.sender == owner, "not owner");
-        _;
-    }
-
-    modifier onlyAdmin() {
-        require(msg.sender == owner || admins[msg.sender], "not admin");
         _;
     }
 
@@ -88,8 +82,6 @@ contract MiningManager {
     constructor() {
         owner = msg.sender;
         admins[msg.sender] = true;
-        emit AdminAdded(msg.sender, msg.sender);
-
 
         _addMiner(1e16, 1e12, type(uint256).max, 0);
         _addMiner(1 ether, 1e14, 0, 0);
@@ -117,7 +109,7 @@ contract MiningManager {
         p.lastUpdate = block.timestamp;
     }
 
-    // ---------- PRICE (O(1)) ----------
+    // ---------- PRICE ----------
     function currentPrice(uint256 id) public view returns (uint256) {
         uint256 k = totalMinted[id];
         if (k > PRICE_CAP) k = PRICE_CAP;
@@ -273,8 +265,7 @@ contract MiningManager {
         uint256 ratePerSecond,
         uint256 unlockRequiresId,
         uint256 unlockMinInvested,
-        bool active,
-        uint256 totalMintedGlobal
+        bool active
     ) {
         MinerType memory m = miners[id];
         return (
@@ -283,9 +274,12 @@ contract MiningManager {
             m.ratePerSecond,
             m.unlockRequiresId,
             m.unlockMinInvested,
-            m.active,
-            totalMinted[id]
+            m.active
         );
+    }
+
+    function getMinerMinted(uint256 id) external view returns (uint256) {
+        return totalMinted[id];
     }
 
     function minersCount() external view returns (uint256) {
@@ -297,20 +291,20 @@ contract MiningManager {
     }
 
     // ---------- ADMIN ----------
-    function setEmission(uint256 bps) external onlyAdmin {
+    function setEmission(uint256 bps) external onlyOwner {
         require(bps <= 100000, "too high");
         emissionRatePerSecondGlobal = bps;
     }
 
-    function setMiningPaused(bool v) external onlyAdmin {
+    function setMiningPaused(bool v) external onlyOwner {
         miningPaused = v;
     }
 
-    function setWithdrawPaused(bool v) external onlyAdmin {
+    function setWithdrawPaused(bool v) external onlyOwner {
         withdrawPaused = v;
     }
 
-    function fundRewardPool() external payable onlyAdmin {
+    function fundRewardPool() external payable onlyOwner {
         rewardPool += msg.value;
         emit PoolUpdated(rewardPool, treasury);
     }
@@ -345,7 +339,6 @@ contract MiningManager {
             emit AdminAdded(newOwner, msg.sender);
         }
     }
-
 
     receive() external payable {
         rewardPool += msg.value;
