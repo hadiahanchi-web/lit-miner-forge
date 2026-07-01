@@ -16,16 +16,20 @@ export const Route = createFileRoute("/leaderboard")({
   component: Leaderboard,
 });
 
-type SortKey = "efficiencyPct" | "uptimeSec" | "power" | "claimed" | "invested" | "minerCount" | "level";
+type SortKey = "efficiencyPct" | "uptimeSec" | "activeDays" | "streakDays" | "contribution" | "power" | "claimed" | "invested" | "minerCount" | "level";
 const SORT_LABEL: Record<SortKey, string> = {
   efficiencyPct: "Efficiency (ROI %)",
-  uptimeSec: "Mining uptime",
+  uptimeSec: "Uptime",
+  activeDays: "Consistency (days)",
+  streakDays: "Streak",
+  contribution: "Contribution",
   power: "Mining power",
   claimed: "Lifetime rewards",
   invested: "Investment",
   minerCount: "Miner count",
   level: "Player level",
 };
+
 
 function Leaderboard() {
   const rows = useLeaderboard();
@@ -45,7 +49,11 @@ function Leaderboard() {
         efficiencyPct: r.efficiencyPct,
         avgHwEfficiency: r.avgHwEfficiency,
         uptimeSec: r.uptimeSec,
+        activeDays: r.activeDays,
+        streakDays: r.streakDays,
+        contribution: r.contribution,
       }))
+
       .sort((a, b) => (b[sort] as number) - (a[sort] as number));
   }, [rows, sort]);
 
@@ -84,16 +92,19 @@ function Leaderboard() {
               <th className="px-4 py-3 text-right">HW Eff</th>
               <th className="px-4 py-3 text-right">ROI %</th>
               <th className="px-4 py-3 text-right">Uptime (h)</th>
+              <th className="px-4 py-3 text-right">Days</th>
+              <th className="px-4 py-3 text-right">Streak</th>
               <th className="px-4 py-3 text-right">Power / day</th>
               <th className="px-4 py-3 text-right">Claimed</th>
-              <th className="px-4 py-3 text-right">Invested</th>
+              <th className="px-4 py-3 text-right">Contrib.</th>
               <th className="px-4 py-3 text-right">Refs</th>
+
             </tr>
           </thead>
           <tbody>
             {enriched.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-12 text-center text-muted-foreground">
+                <td colSpan={13} className="px-4 py-12 text-center text-muted-foreground">
                   No miners yet. Be the first to deploy a rig.
                 </td>
               </tr>
@@ -130,12 +141,15 @@ function Leaderboard() {
                     {r.efficiencyPct.toFixed(1)}%
                   </td>
                   <td className="px-4 py-3 text-right font-mono">{(r.uptimeSec / 3600).toFixed(1)}</td>
+                  <td className="px-4 py-3 text-right font-mono neon-blue">{r.activeDays}</td>
+                  <td className="px-4 py-3 text-right font-mono neon-orange">{r.streakDays}🔥</td>
                   <td className="px-4 py-3 text-right font-mono neon-blue">{fmtZk(r.power, 5)}</td>
                   <td className="px-4 py-3 text-right font-mono neon-orange">
                     {fmtZk(r.claimed, 4)}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono">{fmtZk(r.invested, 2)}</td>
+                  <td className="px-4 py-3 text-right font-mono">{fmtZk(r.contribution, 2)}</td>
                   <td className="px-4 py-3 text-right font-mono">{r.referrals}</td>
+
                 </tr>
               );
             })}

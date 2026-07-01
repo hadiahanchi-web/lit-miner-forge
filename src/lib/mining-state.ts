@@ -87,7 +87,12 @@ export interface PlayerState {
   totalClaims: number;
   totalRepairs: number;
   achievements: string[];
+  // consistency
+  activeDays: number;         // unique UTC days with any action
+  lastActiveDate?: string;    // YYYY-MM-DD
+  streakDays: number;         // consecutive active days
 }
+
 
 export interface PoolState {
   rewardPool: number;
@@ -193,6 +198,9 @@ function emptyPlayer(a: string): PlayerState {
     totalClaims: 0,
     totalRepairs: 0,
     achievements: [],
+    activeDays: 0,
+    streakDays: 0,
+
   };
 }
 
@@ -358,7 +366,22 @@ function assertCooldown(p: PlayerState) {
 
 function stamp(p: PlayerState) {
   p.lastActionAt = nowSec();
+  const today = todayUTC();
+  if (p.lastActiveDate !== today) {
+    // increment streak if yesterday, else reset to 1
+    if (p.lastActiveDate) {
+      const prev = new Date(p.lastActiveDate + "T00:00:00Z").getTime();
+      const cur = new Date(today + "T00:00:00Z").getTime();
+      const diffDays = Math.round((cur - prev) / 86_400_000);
+      p.streakDays = diffDays === 1 ? p.streakDays + 1 : 1;
+    } else {
+      p.streakDays = 1;
+    }
+    p.activeDays += 1;
+    p.lastActiveDate = today;
+  }
 }
+
 
 /** Split a fee into the 70/30 pool/treasury sinks. */
 function ingestFee(pool: PoolState, amount: number) {
@@ -519,11 +542,13 @@ export function useMiningState(address?: string) {
     let p = loadPlayer(address);
     assertCooldown(p);
     p = accrue(p, pool);
+    if (p.walletEnergy <= 0) throw new Error("No wallet energy — refill to claim");
     if (p.claimsThisEpoch >= CLAIMS_PER_EPOCH) {
       throw new Error(`Only ${CLAIMS_PER_EPOCH} claim per 24h epoch — try tomorrow`);
     }
     if (p.pending < WITHDRAW_THRESHOLD)
       throw new Error(`Need ${WITHDRAW_THRESHOLD} zkLTC to withdraw`);
+
     // Cap payout at pool balance and at remaining daily budget
     const gross = Math.min(p.pending, pool.rewardPool);
     if (gross <= 0) throw new Error("Reward pool empty — try again later");
@@ -656,12 +681,13 @@ export function useMiningState(address?: string) {
   };
 }
 
-// Leaderboard — v4 metrics: efficiency (rewards/invested), uptime, lifetime, invested
+// Leaderboard — v5 metrics
 export interface LeaderRow extends PlayerState {
   power: number;
   minerCount: number;
-  efficiencyPct: number; // lifetimeRewards / totalInvested
+  efficiencyPct: number;   // lifetimeRewards / totalInvested
   avgHwEfficiency: number;
+  contribution: number;    // total zkLTC contributed to sinks (invested)
 }
 export function useLeaderboard(): LeaderRow[] {
   const [rows, setRows] = useState<LeaderRow[]>([]);
@@ -674,15 +700,15 @@ export function useLeaderboard(): LeaderRow[] {
           const minerCount = p.minerCounts.reduce((s, n) => s + n, 0);
           const power = baseRatePerSecond(p.minerCounts, p.minerLevels) * DAY;
           const efficiencyPct = p.totalInvested > 0 ? (p.lifetimeRewards / p.totalInvested) * 100 : 0;
-          // weighted hw efficiency
           let sum = 0;
           for (let i = 0; i < MINERS.length; i++) sum += (p.minerCounts[i] || 0) * tierEfficiency(i);
           const avgHwEfficiency = minerCount > 0 ? sum / minerCount : 0;
-          return { ...p, minerCount, power, efficiencyPct, avgHwEfficiency };
+          return { ...p, minerCount, power, efficiencyPct, avgHwEfficiency, contribution: p.totalInvested };
         }),
       );
     };
     load();
+
     const id = setInterval(load, 3000);
     return () => clearInterval(id);
   }, []);
