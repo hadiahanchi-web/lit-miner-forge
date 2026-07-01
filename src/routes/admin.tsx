@@ -159,7 +159,8 @@ function useContractWrite(label: string) {
 
   async function send(args: Parameters<typeof writeContractAsync>[0]) {
     try {
-      const h = await writeContractAsync(args);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const h = await writeContractAsync(args as any);
       setHash(h);
       toast.info(`${label} submitted…`);
       return h;
