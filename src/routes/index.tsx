@@ -58,7 +58,8 @@ function Index() {
 
   const minerCounts = (player?.minerCounts ?? []).map((n) => Number(n));
   const totalMiners = minerCounts.reduce((a, b) => a + b, 0);
-  const ratePerSec = player?.ratePerSecond ?? 0n;
+  const baseRate = player?.ratePerSecond ?? 0n;
+  const ratePerSec = (baseRate * emissionBps) / 10000n;
   const dailyRate = ratePerSec * 86400n;
 
   return (
