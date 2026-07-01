@@ -159,15 +159,17 @@ function DashboardPage() {
           </button>
         </div>
 
-        <div className="glass rounded-2xl p-5">
-          <h2 className="font-display text-lg font-semibold">Pool Health</h2>
-          <div className="mt-3 grid gap-2 text-sm">
-            <Row label="Reward pool" value={`${fmtBig(rewardPool, 3)} zkLTC`} />
-            <Row label="Treasury" value={`${fmtBig(treasury, 3)} zkLTC`} />
-            <Row label="Emission" value={`${(Number(emissionBps) / 100).toFixed(2)}%`} />
-            <Row label="Total invested" value={`${fmtBig(player?.totalInvested ?? 0n, 4)} zkLTC`} />
+        {isAdmin && (
+          <div className="glass rounded-2xl p-5">
+            <h2 className="font-display text-lg font-semibold">Pool Health</h2>
+            <div className="mt-3 grid gap-2 text-sm">
+              <Row label="Reward pool" value={`${fmtBig(rewardPool, 3)} zkLTC`} />
+              <Row label="Treasury" value={`${fmtBig(treasury, 3)} zkLTC`} />
+              <Row label="Emission" value={`${(Number(emissionBps) / 100).toFixed(2)}%`} />
+              <Row label="Total invested" value={`${fmtBig(player?.totalInvested ?? 0n, 4)} zkLTC`} />
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       <section className="glass mt-4 rounded-2xl p-5">
