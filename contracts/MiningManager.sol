@@ -353,14 +353,28 @@ contract MiningManager {
         _accrue(p);
         require(p.pending >= WITHDRAW_THRESHOLD, "below threshold");
 
-        // Cap gross payout at pool balance; net = gross - maintenance fee to treasury
+    function claimRewards() external nonReentrant {
+        require(!withdrawPaused, "withdraw paused");
+        Player storage p = _players[msg.sender];
+        require(p.registered, "not registered");
+        _accrue(p);
+        require(p.pending >= WITHDRAW_THRESHOLD, "below threshold");
+        require(rewardPool > 0, "pool empty");
+
+        // Payout liquidity = min(pending, pool available, per-tx safety cap).
+        // Pool is the ONLY source of withdrawal liquidity; pending stays as
+        // an internal ledger and never forces the pool negative.
         uint256 gross = p.pending;
-        if (gross > rewardPool) gross = rewardPool;
-        require(gross > 0, "pool empty");
+        uint256 poolCap = (rewardPool * MAX_CLAIM_POOL_BPS) / 10_000;
+        if (poolCap == 0) poolCap = rewardPool; // tiny pools: allow full drain up to balance
+        if (gross > poolCap) gross = poolCap;
+        if (gross > rewardPool) gross = rewardPool; // defensive; must never underflow
+        require(gross > 0, "no liquidity");
 
         uint256 fee = (gross * MAINTENANCE_BPS) / 10_000;
         uint256 net = gross - fee;
 
+        // Ledger updates BEFORE external call (checks-effects-interactions).
         p.pending -= gross;
         p.lifetimeRewards += net;
         p.totalClaims += 1;
@@ -380,7 +394,7 @@ contract MiningManager {
         Player storage p = _players[who];
         if (!p.registered) return 0;
         uint256 dt = block.timestamp - p.lastUpdate;
-        uint256 emitted = (dt * p.ratePerSecond * emissionBps()) / 10_000;
+        uint256 emitted = (dt * p.ratePerSecond * emissionRatePerSecondGlobal) / 10_000;
         return p.pending + emitted;
     }
 
