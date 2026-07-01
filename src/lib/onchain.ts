@@ -5,6 +5,24 @@ import { MINING_MANAGER_ABI, MINING_MANAGER_ADDRESS } from "./contract";
 
 const contract = { address: MINING_MANAGER_ADDRESS, abi: MINING_MANAGER_ABI } as const;
 
+/** True when the connected wallet is the contract owner or an approved admin. */
+export function useIsAdmin() {
+  const { address } = useAccount();
+  const { data, isLoading } = useReadContracts({
+    contracts: address
+      ? [
+          { ...contract, functionName: "owner" },
+          { ...contract, functionName: "admins", args: [address] },
+        ]
+      : [],
+    query: { enabled: !!address, refetchInterval: 8000 },
+  });
+  const owner = (data?.[0]?.result as `0x${string}` | undefined) ?? undefined;
+  const isAdminFlag = (data?.[1]?.result as boolean | undefined) ?? false;
+  const isOwner = !!address && !!owner && address.toLowerCase() === owner.toLowerCase();
+  return { isAdmin: isOwner || isAdminFlag, isOwner, owner, isLoading };
+}
+
 /** Auto-refresh all wagmi reads on every new block. */
 export function useBlockRefetch() {
   const { data: block } = useBlockNumber({ watch: true });
