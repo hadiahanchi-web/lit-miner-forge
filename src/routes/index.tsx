@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useBalance } from "wagmi";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import {
   Coins,
   Flame,
@@ -43,6 +43,8 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   useBlockRefetch();
   const { address, isConnected } = useAccount();
   const { data: bal } = useBalance({ address, query: { refetchInterval: 5000 } });
@@ -51,6 +53,7 @@ function Index() {
   const { miners } = useMiners();
   const { rewardPool, treasury, miningPaused, emissionBps } = usePoolInfo();
 
+  if (!mounted) return <ConnectGate ssrPlaceholder />;
   if (!isConnected || !address) return <ConnectGate />;
 
   const minerCounts = (player?.minerCounts ?? []).map((n) => Number(n));
@@ -220,7 +223,7 @@ function Index() {
   );
 }
 
-function ConnectGate() {
+function ConnectGate({ ssrPlaceholder }: { ssrPlaceholder?: boolean } = {}) {
   return (
     <main className="mx-auto grid min-h-[calc(100vh-64px)] max-w-3xl place-items-center px-4">
       <div className="glass w-full rounded-3xl p-10 text-center">
