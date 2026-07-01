@@ -1,31 +1,35 @@
-import { RainbowKitProvider, darkTheme, getDefaultConfig } from "@rainbow-me/rainbowkit";
-import "@rainbow-me/rainbowkit/styles.css";
-import { WagmiProvider } from "wagmi";
-import type { ReactNode } from "react";
-import { litForge } from "./chain";
+import { lazy, Suspense, type ReactNode } from "react";
 
-export const wagmiConfig = getDefaultConfig({
-  appName: "LiteMiner",
-  projectId: "liteminer-liteforge",
-  chains: [litForge],
-  ssr: false,
-});
+// Lazy-load the wagmi + rainbowkit + walletconnect stack so it never enters
+// the Cloudflare Workers SSR bundle graph — that stack throws
+// "Class extends value [object Module] is not a constructor" under workerd.
+const ClientWeb3Provider = lazy(() =>
+  import("./web3-client").then((m) => ({ default: m.ClientWeb3Provider })),
+);
+
+function SsrShell() {
+  return (
+    <div className="grid min-h-screen place-items-center px-4 text-center">
+      <div className="glass max-w-md rounded-3xl p-10">
+        <div className="mx-auto mb-4 h-14 w-14 rounded-2xl bg-gradient-to-br from-sky-400 to-orange-500 shadow-lg shadow-sky-500/30" />
+        <h1 className="font-display text-2xl font-bold">LiteMiner</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Loading on-chain mining interface…
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export function Web3Provider({ children }: { children: ReactNode }) {
+  if (typeof window === "undefined") {
+    // Skip the entire wagmi tree on the server — every consumer uses wagmi
+    // hooks, which would throw without a provider.
+    return <SsrShell />;
+  }
   return (
-    <WagmiProvider config={wagmiConfig}>
-      <RainbowKitProvider
-        theme={darkTheme({
-          accentColor: "#f97316",
-          accentColorForeground: "#0b1120",
-          borderRadius: "large",
-          fontStack: "system",
-          overlayBlur: "small",
-        })}
-        modalSize="compact"
-      >
-        {children}
-      </RainbowKitProvider>
-    </WagmiProvider>
+    <Suspense fallback={<SsrShell />}>
+      <ClientWeb3Provider>{children}</ClientWeb3Provider>
+    </Suspense>
   );
 }
