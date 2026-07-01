@@ -1,0 +1,250 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useAccount, useBalance, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { toast } from "sonner";
+import { Lock, Loader2, ShoppingBag, Package, Timer, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { MINING_MANAGER_ABI, MINING_MANAGER_ADDRESS } from "@/lib/contract";
+import {
+  CONTRACT_DEPLOYED,
+  useBlockRefetch,
+  useCooldown,
+  useMiners,
+  usePlayer,
+  usePoolInfo,
+  type OnChainMiner,
+} from "@/lib/onchain";
+import { fmtBig } from "@/lib/bigformat";
+
+export const Route = createFileRoute("/shop")({
+  head: () => ({
+    meta: [
+      { title: "Shop — LiteMiner" },
+      { name: "description", content: "Buy on-chain zkLTC miners from LiteMiner MiningManager." },
+    ],
+  }),
+  component: ShopPage,
+});
+
+function ShopPage() {
+  useBlockRefetch();
+  const { address, isConnected } = useAccount();
+  const { data: bal } = useBalance({ address, query: { refetchInterval: 5000 } });
+  const { miners, isLoading: minersLoading } = useMiners();
+  const { player } = usePlayer();
+  const { miningPaused } = usePoolInfo();
+  const { lastAction, cooldown } = useCooldown();
+
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const cooldownRemaining = Math.max(0, Number(lastAction + cooldown) - nowSec);
+
+  return (
+    <main className="mx-auto max-w-7xl px-4 py-6">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-bold">
+            <ShoppingBag className="mr-2 inline h-7 w-7 text-orange-400" />
+            Miner Shop
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            All prices, rates and locks are read live from the MiningManager contract.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs">
+          {miningPaused && (
+            <span className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-red-300">
+              Mining paused
+            </span>
+          )}
+          {cooldownRemaining > 0 && (
+            <span className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-orange-200">
+              <Timer className="mr-1 inline h-3 w-3" /> Cooldown {cooldownRemaining}s
+            </span>
+          )}
+        </div>
+      </header>
+
+      {!CONTRACT_DEPLOYED && <NotDeployedBanner />}
+
+      {minersLoading ? (
+        <div className="grid place-items-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-sky-400" />
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {miners.map((m) => (
+            <MinerShopCard
+              key={m.id}
+              miner={m}
+              connected={isConnected}
+              balance={bal?.value ?? 0n}
+              ownedCount={player?.minerCounts?.[m.id] ?? 0n}
+              player={player}
+              miningPaused={miningPaused}
+              cooldownRemaining={cooldownRemaining}
+            />
+          ))}
+        </div>
+      )}
+    </main>
+  );
+}
+
+function MinerShopCard({
+  miner,
+  connected,
+  balance,
+  ownedCount,
+  player,
+  miningPaused,
+  cooldownRemaining,
+}: {
+  miner: OnChainMiner;
+  connected: boolean;
+  balance: bigint;
+  ownedCount: bigint;
+  player: ReturnType<typeof usePlayer>["player"];
+  miningPaused: boolean;
+  cooldownRemaining: number;
+}) {
+  const { writeContractAsync, isPending } = useWriteContract();
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
+
+  useEffect(() => {
+    if (isSuccess) toast.success(`Deployed miner #${miner.id}`);
+  }, [isSuccess, miner.id]);
+
+  // Unlock: requires ownership of unlockRequiresId AND totalInvested >= unlockMinInvested
+  const requiresId = miner.unlockRequiresId;
+  const requiresIdIsSentinel = requiresId > 1_000_000n;
+  const meetsPrereq =
+    requiresIdIsSentinel
+      ? true
+      : (player?.minerCounts?.[Number(requiresId)] ?? 0n) > 0n;
+  const meetsInvest = (player?.totalInvested ?? 0n) >= miner.unlockMinInvested;
+  const unlocked = miner.active && meetsPrereq && meetsInvest;
+
+  const canAfford = balance >= miner.price;
+  const disabled =
+    !connected ||
+    !unlocked ||
+    !canAfford ||
+    miningPaused ||
+    cooldownRemaining > 0 ||
+    isPending ||
+    isConfirming;
+
+  async function onBuy() {
+    try {
+      const hash = await writeContractAsync({
+        address: MINING_MANAGER_ADDRESS,
+        abi: MINING_MANAGER_ABI,
+        functionName: "buyMiner",
+        args: [BigInt(miner.id)],
+        value: miner.price,
+      });
+      setTxHash(hash);
+      toast.info("Transaction submitted…");
+    } catch (e) {
+      toast.error((e as Error).message?.slice(0, 140) ?? "Transaction failed");
+    }
+  }
+
+  const ratePerDay = miner.ratePerSecond * 86400n;
+
+  return (
+    <div className="glass relative flex flex-col overflow-hidden rounded-2xl p-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Tier {miner.id} {miner.active ? "" : "· inactive"}
+          </div>
+          <div className="font-display text-lg font-semibold">
+            <Package className="mr-1.5 inline h-4 w-4 text-sky-400" />
+            Miner #{miner.id}
+          </div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-mono">
+          {ownedCount.toString()} owned
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <Metric label="Live price" value={`${fmtBig(miner.price, 5)} zkLTC`} highlight />
+        <Metric label="Base price" value={`${fmtBig(miner.basePrice, 5)} zkLTC`} />
+        <Metric label="Rate / sec" value={fmtBig(miner.ratePerSecond, 8)} />
+        <Metric label="Rate / day" value={fmtBig(ratePerDay, 6)} />
+        <Metric label="Global minted" value={miner.totalMintedGlobal.toString()} />
+        <Metric
+          label="Min invested"
+          value={miner.unlockMinInvested === 0n ? "—" : `${fmtBig(miner.unlockMinInvested, 3)}`}
+        />
+      </div>
+
+      {!unlocked && (
+        <div className="mt-3 rounded-lg border border-orange-500/30 bg-orange-500/5 px-2.5 py-1.5 text-[11px] text-orange-200">
+          <Lock className="mr-1 inline h-3 w-3" />
+          {!miner.active
+            ? "Inactive"
+            : !meetsPrereq
+              ? `Requires Miner #${requiresId.toString()}`
+              : `Requires ${fmtBig(miner.unlockMinInvested, 3)} zkLTC invested`}
+        </div>
+      )}
+
+      <button
+        disabled={disabled}
+        onClick={onBuy}
+        className="btn-neon mt-4 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {isPending || isConfirming ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" /> Confirming…
+          </>
+        ) : !connected ? (
+          "Connect wallet"
+        ) : !unlocked ? (
+          <>
+            <Lock className="h-3.5 w-3.5" /> Locked
+          </>
+        ) : !canAfford ? (
+          `Need ${fmtBig(miner.price, 4)} zkLTC`
+        ) : cooldownRemaining > 0 ? (
+          `Cooldown ${cooldownRemaining}s`
+        ) : miningPaused ? (
+          "Paused"
+        ) : (
+          <>
+            <TrendingUp className="h-4 w-4" /> Buy · {fmtBig(miner.price, 5)} zkLTC
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
+function Metric({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className="rounded-lg border border-white/5 bg-black/20 px-2 py-1.5">
+      <div className="text-[9px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className={`font-mono text-xs ${highlight ? "neon-blue" : "text-foreground"}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function NotDeployedBanner() {
+  return (
+    <div className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+      MiningManager contract address is not set. Deploy{" "}
+      <code className="font-mono">contracts/MiningManager.sol</code> and paste the address in{" "}
+      <code className="font-mono">src/lib/contract.ts</code>.
+    </div>
+  );
+}
