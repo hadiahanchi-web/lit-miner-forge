@@ -32,7 +32,9 @@ export function TopBar() {
           <NavLink to="/shop" label="Shop" icon={<ShoppingBag className="h-3.5 w-3.5" />} />
           <NavLink to="/dashboard" label="Dashboard" icon={<Gauge className="h-3.5 w-3.5" />} />
           <NavLink to="/leaderboard" label="Leaderboard" icon={<Trophy className="h-3.5 w-3.5" />} />
-          <NavLink to="/admin" label="Admin" icon={<ShieldCheck className="h-3.5 w-3.5" />} />
+          {isAdmin && (
+            <NavLink to="/admin" label="Admin" icon={<ShieldCheck className="h-3.5 w-3.5" />} />
+          )}
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
