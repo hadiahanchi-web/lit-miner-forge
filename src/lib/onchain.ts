@@ -152,3 +152,64 @@ export function useCooldown() {
 export const CONTRACT_DEPLOYED =
   (MINING_MANAGER_ADDRESS as string) !== "0x0000000000000000000000000000000000000000";
 
+export type OnChainLeaderRow = {
+  address: `0x${string}`;
+  totalInvested: bigint;
+  lifetimeRewards: bigint;
+  ratePerSecond: bigint;
+  minerCount: bigint;
+};
+
+/** Reads playerList[0..n] then getPlayer for each. */
+export function useLeaderboard() {
+  const { data: count } = useReadContract({ ...contract, functionName: "playersCount" });
+  const n = Number(count ?? 0n);
+
+  const { data: addrData } = useReadContracts({
+    contracts: Array.from({ length: n }, (_, i) => ({
+      ...contract,
+      functionName: "playerList" as const,
+      args: [BigInt(i)] as const,
+    })),
+    query: { enabled: n > 0 },
+  });
+
+  const addresses = useMemo(
+    () =>
+      (addrData ?? [])
+        .map((d) => d.result as `0x${string}` | undefined)
+        .filter((a): a is `0x${string}` => !!a),
+    [addrData],
+  );
+
+  const { data: playerData, isLoading } = useReadContracts({
+    contracts: addresses.map((a) => ({
+      ...contract,
+      functionName: "getPlayer" as const,
+      args: [a] as const,
+    })),
+    query: { enabled: addresses.length > 0 },
+  });
+
+  const rows: OnChainLeaderRow[] = useMemo(() => {
+    if (!playerData) return [];
+    return playerData.map((d, i) => {
+      const r = (d.result ?? []) as unknown as readonly [
+        boolean, bigint, bigint, bigint, bigint, bigint, readonly bigint[], readonly bigint[]
+      ];
+      const counts = (r?.[6] ?? []) as readonly bigint[];
+      const totalMiners = counts.reduce((a, b) => a + b, 0n);
+      return {
+        address: addresses[i],
+        totalInvested: r?.[1] ?? 0n,
+        lifetimeRewards: r?.[2] ?? 0n,
+        ratePerSecond: r?.[5] ?? 0n,
+        minerCount: totalMiners,
+      };
+    });
+  }, [playerData, addresses]);
+
+  return { rows, isLoading, playersCount: n };
+}
+
+
