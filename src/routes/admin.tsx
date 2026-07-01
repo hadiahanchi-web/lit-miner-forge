@@ -24,6 +24,7 @@ import {
 import { MINING_MANAGER_ABI, MINING_MANAGER_ADDRESS } from "@/lib/contract";
 import { CONTRACT_DEPLOYED, useBlockRefetch, usePoolInfo } from "@/lib/onchain";
 import { fmtBig } from "@/lib/bigformat";
+import { MOBILE_NAV_VARIANTS, useMobileNavVariant } from "@/lib/mobile-nav";
 
 const contract = { address: MINING_MANAGER_ADDRESS, abi: MINING_MANAGER_ABI } as const;
 
@@ -130,6 +131,7 @@ export default function Admin() {
         <CircuitBreakers miningPaused={miningPaused} withdrawPaused={withdrawPaused} />
         <FundPool />
         <EmissionCard current={emissionBps} />
+        <MobileNavCard />
         {isOwner && <AdminManagement />}
         {isOwner && <TreasuryWithdraw treasury={treasury} />}
       </div>
