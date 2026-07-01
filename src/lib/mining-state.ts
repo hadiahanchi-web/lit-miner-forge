@@ -366,7 +366,22 @@ function assertCooldown(p: PlayerState) {
 
 function stamp(p: PlayerState) {
   p.lastActionAt = nowSec();
+  const today = todayUTC();
+  if (p.lastActiveDate !== today) {
+    // increment streak if yesterday, else reset to 1
+    if (p.lastActiveDate) {
+      const prev = new Date(p.lastActiveDate + "T00:00:00Z").getTime();
+      const cur = new Date(today + "T00:00:00Z").getTime();
+      const diffDays = Math.round((cur - prev) / 86_400_000);
+      p.streakDays = diffDays === 1 ? p.streakDays + 1 : 1;
+    } else {
+      p.streakDays = 1;
+    }
+    p.activeDays += 1;
+    p.lastActiveDate = today;
+  }
 }
+
 
 /** Split a fee into the 70/30 pool/treasury sinks. */
 function ingestFee(pool: PoolState, amount: number) {
