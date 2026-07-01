@@ -542,11 +542,13 @@ export function useMiningState(address?: string) {
     let p = loadPlayer(address);
     assertCooldown(p);
     p = accrue(p, pool);
+    if (p.walletEnergy <= 0) throw new Error("No wallet energy — refill to claim");
     if (p.claimsThisEpoch >= CLAIMS_PER_EPOCH) {
       throw new Error(`Only ${CLAIMS_PER_EPOCH} claim per 24h epoch — try tomorrow`);
     }
     if (p.pending < WITHDRAW_THRESHOLD)
       throw new Error(`Need ${WITHDRAW_THRESHOLD} zkLTC to withdraw`);
+
     // Cap payout at pool balance and at remaining daily budget
     const gross = Math.min(p.pending, pool.rewardPool);
     if (gross <= 0) throw new Error("Reward pool empty — try again later");
