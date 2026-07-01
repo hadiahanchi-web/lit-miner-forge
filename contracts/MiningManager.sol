@@ -297,10 +297,55 @@ contract MiningManager {
     }
 
     // ---------- ADMIN ----------
-    function setEmission(uint256 bps) external onlyOwner {
+    function setEmission(uint256 bps) external onlyAdmin {
         require(bps <= 100000, "too high");
         emissionRatePerSecondGlobal = bps;
     }
+
+    function setMiningPaused(bool v) external onlyAdmin {
+        miningPaused = v;
+    }
+
+    function setWithdrawPaused(bool v) external onlyAdmin {
+        withdrawPaused = v;
+    }
+
+    function fundRewardPool() external payable onlyAdmin {
+        rewardPool += msg.value;
+        emit PoolUpdated(rewardPool, treasury);
+    }
+
+    function withdrawTreasury(address to, uint256 amount) external onlyOwner nonReentrant {
+        require(amount <= treasury, "exceeds");
+        treasury -= amount;
+        (bool ok,) = to.call{value: amount}("");
+        require(ok, "fail");
+        emit PoolUpdated(rewardPool, treasury);
+    }
+
+    function addAdmin(address newAdmin) external onlyOwner {
+        require(newAdmin != address(0), "zero");
+        require(!admins[newAdmin], "exists");
+        admins[newAdmin] = true;
+        emit AdminAdded(newAdmin, msg.sender);
+    }
+
+    function removeAdmin(address admin) external onlyOwner {
+        require(admin != owner, "owner locked");
+        require(admins[admin], "not admin");
+        admins[admin] = false;
+        emit AdminRemoved(admin, msg.sender);
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "zero");
+        owner = newOwner;
+        if (!admins[newOwner]) {
+            admins[newOwner] = true;
+            emit AdminAdded(newOwner, msg.sender);
+        }
+    }
+
 
     receive() external payable {
         rewardPool += msg.value;
