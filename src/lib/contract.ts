@@ -1,27 +1,71 @@
 // Deploy MiningManager.sol from /contracts, then paste address here.
-export const MINING_MANAGER_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+export const MINING_MANAGER_ADDRESS = "0x7fd8b39158fC2c858e06c020A82c123EAF36729E" as const;
 
 export const MINING_MANAGER_ABI = [
-  { type: "function", name: "buyMiner", stateMutability: "payable", inputs: [{ name: "id", type: "uint256" }], outputs: [] },
+  {
+    type: "function",
+    name: "buyMiner",
+    stateMutability: "payable",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [],
+  },
   { type: "function", name: "claimRewards", stateMutability: "nonpayable", inputs: [], outputs: [] },
-  { type: "function", name: "currentPrice", stateMutability: "view", inputs: [{ name: "id", type: "uint256" }], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "calculateRewards", stateMutability: "view", inputs: [{ name: "who", type: "address" }], outputs: [{ type: "uint256" }] },
+  {
+    type: "function",
+    name: "currentPrice",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "calculateRewards",
+    stateMutability: "view",
+    inputs: [{ name: "who", type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
   { type: "function", name: "rewardPool", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "treasury", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "WITHDRAW_THRESHOLD", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "MAX_UNITS_PER_MINER", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    type: "function",
+    name: "MAX_UNITS_PER_MINER",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
   { type: "function", name: "MAX_CLAIM_POOL_BPS", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "MAINTENANCE_BPS", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "COOLDOWN", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "miningPaused", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
   { type: "function", name: "withdrawPaused", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
-  { type: "function", name: "emissionRatePerSecondGlobal", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "totalMinted", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "lastAction", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] },
+  {
+    type: "function",
+    name: "emissionRatePerSecondGlobal",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "totalMinted",
+    stateMutability: "view",
+    inputs: [{ type: "uint256" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "lastAction",
+    stateMutability: "view",
+    inputs: [{ type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
   { type: "function", name: "minersCount", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "playersCount", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   {
-    type: "function", name: "getMiner", stateMutability: "view",
+    type: "function",
+    name: "getMiner",
+    stateMutability: "view",
     inputs: [{ name: "id", type: "uint256" }],
     outputs: [
       { name: "price", type: "uint256" },
@@ -34,7 +78,9 @@ export const MINING_MANAGER_ABI = [
     ],
   },
   {
-    type: "function", name: "getPlayer", stateMutability: "view",
+    type: "function",
+    name: "getPlayer",
+    stateMutability: "view",
     inputs: [{ name: "who", type: "address" }],
     outputs: [
       { name: "registered", type: "bool" },
@@ -47,19 +93,31 @@ export const MINING_MANAGER_ABI = [
       { name: "minerLevels", type: "uint256[]" },
     ],
   },
-  { type: "event", name: "MinerPurchased", inputs: [
-    { indexed: true, name: "player", type: "address" },
-    { indexed: true, name: "id", type: "uint256" },
-    { indexed: false, name: "price", type: "uint256" },
-  ] },
-  { type: "event", name: "RewardsClaimed", inputs: [
-    { indexed: true, name: "player", type: "address" },
-    { indexed: false, name: "gross", type: "uint256" },
-    { indexed: false, name: "net", type: "uint256" },
-    { indexed: false, name: "fee", type: "uint256" },
-  ] },
-  { type: "event", name: "PoolUpdated", inputs: [
-    { indexed: false, name: "rewardPool", type: "uint256" },
-    { indexed: false, name: "treasury", type: "uint256" },
-  ] },
+  {
+    type: "event",
+    name: "MinerPurchased",
+    inputs: [
+      { indexed: true, name: "player", type: "address" },
+      { indexed: true, name: "id", type: "uint256" },
+      { indexed: false, name: "price", type: "uint256" },
+    ],
+  },
+  {
+    type: "event",
+    name: "RewardsClaimed",
+    inputs: [
+      { indexed: true, name: "player", type: "address" },
+      { indexed: false, name: "gross", type: "uint256" },
+      { indexed: false, name: "net", type: "uint256" },
+      { indexed: false, name: "fee", type: "uint256" },
+    ],
+  },
+  {
+    type: "event",
+    name: "PoolUpdated",
+    inputs: [
+      { indexed: false, name: "rewardPool", type: "uint256" },
+      { indexed: false, name: "treasury", type: "uint256" },
+    ],
+  },
 ] as const;
