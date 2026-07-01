@@ -64,7 +64,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Buy on-chain miners, earn zkLTC rewards continuously, and climb the leaderboard on the LitVM LiteForge testnet.",
       },
-      { property: "og:title", content: "LiteMiner — zkLTC Mining on LiteForge" },
+      { property: "og:title", content: "LiteMiner — zkLTC Mining on LitVM LiteForge" },
       {
         property: "og:description",
         content:
@@ -72,6 +72,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "LiteMiner — zkLTC Mining on LitVM LiteForge" },
+      { name: "description", content: "LiteMiner is a Web3 browser game where players buy virtual mining machines with zkLTC to earn rewards." },
+      { property: "og:description", content: "LiteMiner is a Web3 browser game where players buy virtual mining machines with zkLTC to earn rewards." },
+      { name: "twitter:description", content: "LiteMiner is a Web3 browser game where players buy virtual mining machines with zkLTC to earn rewards." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/409d985c-4c03-453a-a100-0a7372cdd3ef/id-preview-ab67b245--dc48a061-4f36-4943-b838-dcb26039be93.lovable.app-1782910738988.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/409d985c-4c03-453a-a100-0a7372cdd3ef/id-preview-ab67b245--dc48a061-4f36-4943-b838-dcb26039be93.lovable.app-1782910738988.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
