@@ -130,7 +130,7 @@ export const MAINTENANCE_FEE_BPS = 500;  // 5% of claim → treasury (energy cos
 // Daily reward budget
 export const EPOCH_SEC = 86_400;
 /** % of the reward pool that can be emitted globally per epoch (5%). */
-export const DAILY_EMISSION_BPS = 500;
+export const DAILY_EMISSION_BPS = 300;
 /** % of the daily emission any single wallet can earn per epoch (1%). */
 export const PER_WALLET_EPOCH_CAP_BPS = 100;
 
