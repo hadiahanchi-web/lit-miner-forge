@@ -223,7 +223,7 @@ function Index() {
   );
 }
 
-function ConnectGate() {
+function ConnectGate({ ssrPlaceholder }: { ssrPlaceholder?: boolean } = {}) {
   return (
     <main className="mx-auto grid min-h-[calc(100vh-64px)] max-w-3xl place-items-center px-4">
       <div className="glass w-full rounded-3xl p-10 text-center">
