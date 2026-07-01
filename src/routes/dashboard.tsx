@@ -16,6 +16,7 @@ import { MINING_MANAGER_ABI, MINING_MANAGER_ADDRESS } from "@/lib/contract";
 import {
   CONTRACT_DEPLOYED,
   useBlockRefetch,
+  useIsAdmin,
   useMiners,
   usePendingRewards,
   usePlayer,
@@ -51,6 +52,7 @@ function DashboardPage() {
     maintenanceBps,
     emissionBps,
   } = usePoolInfo();
+  const { isAdmin } = useIsAdmin();
 
   // Contract-derived claim math (view-only mirror of claimRewards logic)
   const poolCap = (rewardPool * maxClaimPoolBps) / 10_000n;
@@ -113,8 +115,8 @@ function DashboardPage() {
           value={`${fmtBig(player?.lifetimeRewards ?? 0n, 4)} zkLTC`} />
       </section>
 
-      <section className="mt-4 grid gap-4 lg:grid-cols-3">
-        <div className="glass rounded-2xl p-5 lg:col-span-2">
+      <section className={`mt-4 grid gap-4 ${isAdmin ? "lg:grid-cols-3" : ""}`}>
+        <div className={`glass rounded-2xl p-5 ${isAdmin ? "lg:col-span-2" : ""}`}>
           <h2 className="font-display text-lg font-semibold">Claim Rewards</h2>
           <p className="text-xs text-muted-foreground">
             Threshold, pool cap and maintenance fee are enforced by the contract.
@@ -157,15 +159,17 @@ function DashboardPage() {
           </button>
         </div>
 
-        <div className="glass rounded-2xl p-5">
-          <h2 className="font-display text-lg font-semibold">Pool Health</h2>
-          <div className="mt-3 grid gap-2 text-sm">
-            <Row label="Reward pool" value={`${fmtBig(rewardPool, 3)} zkLTC`} />
-            <Row label="Treasury" value={`${fmtBig(treasury, 3)} zkLTC`} />
-            <Row label="Emission" value={`${(Number(emissionBps) / 100).toFixed(2)}%`} />
-            <Row label="Total invested" value={`${fmtBig(player?.totalInvested ?? 0n, 4)} zkLTC`} />
+        {isAdmin && (
+          <div className="glass rounded-2xl p-5">
+            <h2 className="font-display text-lg font-semibold">Pool Health</h2>
+            <div className="mt-3 grid gap-2 text-sm">
+              <Row label="Reward pool" value={`${fmtBig(rewardPool, 3)} zkLTC`} />
+              <Row label="Treasury" value={`${fmtBig(treasury, 3)} zkLTC`} />
+              <Row label="Emission" value={`${(Number(emissionBps) / 100).toFixed(2)}%`} />
+              <Row label="Total invested" value={`${fmtBig(player?.totalInvested ?? 0n, 4)} zkLTC`} />
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       <section className="glass mt-4 rounded-2xl p-5">
