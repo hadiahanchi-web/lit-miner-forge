@@ -2,11 +2,12 @@
 export const MINING_MANAGER_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
 export const MINING_MANAGER_ABI = [
+  { type: "function", name: "registerPlayer", stateMutability: "nonpayable", inputs: [], outputs: [] },
   {
     type: "function",
-    name: "registerPlayer",
+    name: "registerWithReferrer",
     stateMutability: "nonpayable",
-    inputs: [],
+    inputs: [{ name: "referrer", type: "address" }],
     outputs: [],
   },
   {
@@ -18,10 +19,21 @@ export const MINING_MANAGER_ABI = [
   },
   {
     type: "function",
-    name: "claimRewards",
-    stateMutability: "nonpayable",
-    inputs: [],
+    name: "upgradeMiner",
+    stateMutability: "payable",
+    inputs: [{ name: "minerType", type: "uint256" }],
     outputs: [],
+  },
+  { type: "function", name: "claimRewards", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  {
+    type: "function",
+    name: "upgradeCost",
+    stateMutability: "view",
+    inputs: [
+      { name: "minerType", type: "uint256" },
+      { name: "currentLevel", type: "uint256" },
+    ],
+    outputs: [{ type: "uint256" }],
   },
   {
     type: "function",
@@ -46,6 +58,9 @@ export const MINING_MANAGER_ABI = [
           { name: "pending", type: "uint256" },
           { name: "ratePerSecond", type: "uint256" },
           { name: "minerCounts", type: "uint256[]" },
+          { name: "minerLevels", type: "uint256[]" },
+          { name: "referrer", type: "address" },
+          { name: "referralEarnings", type: "uint256" },
         ],
       },
     ],

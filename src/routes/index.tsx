@@ -5,6 +5,8 @@ import { Suspense, lazy, useEffect } from "react";
 import { toast } from "sonner";
 
 import { MinerCard } from "@/components/MinerCard";
+import { MissionsPanel } from "@/components/MissionsPanel";
+import { ReferralPanel } from "@/components/ReferralPanel";
 import { MINERS, WITHDRAW_THRESHOLD } from "@/lib/miners";
 import { useMiningState } from "@/lib/mining-state";
 import { fmtZk } from "@/lib/format";
@@ -15,22 +17,48 @@ const MiningScene = lazy(() =>
 );
 
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "LiteMiner — zkLTC mining on LitVM LiteForge" },
+      {
+        name: "description",
+        content:
+          "Buy virtual mining rigs with zkLTC, upgrade them, earn rewards continuously, and refer friends on the LitVM LiteForge testnet.",
+      },
+    ],
+  }),
   component: Index,
 });
+
+function useReferrerFromUrl() {
+  if (typeof window === "undefined") return undefined;
+  const u = new URL(window.location.href);
+  const ref = u.searchParams.get("ref");
+  return ref && /^0x[a-fA-F0-9]{40}$/.test(ref) ? ref : undefined;
+}
 
 function Index() {
   const { address, isConnected } = useAccount();
   const { data: bal } = useBalance({ address });
   const balance = bal ? Number(bal.value) / 1e18 : 0;
 
-  const { player, pool, livePending, ratePerSecond, register, buyMiner, claim } =
-    useMiningState(address);
+  const {
+    player,
+    pool,
+    livePending,
+    ratePerSecond,
+    register,
+    buyMiner,
+    upgradeMiner,
+    claim,
+  } = useMiningState(address);
 
   useEffect(() => {
-    if (isConnected && address && player && !player.registered) {
-      register();
+    if (isConnected && address) {
+      register(useReferrerFromUrl());
     }
-  }, [isConnected, address, player, register]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, address]);
 
   if (!isConnected || !address) return <ConnectGate />;
 
@@ -40,7 +68,6 @@ function Index() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6">
-      {/* Hero + scene */}
       <section className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="glass relative h-[420px] overflow-hidden rounded-2xl">
           <Suspense
@@ -69,7 +96,7 @@ function Index() {
                 Live yield
               </div>
               <div className="font-mono text-sm font-semibold neon-orange">
-                {fmtZk(dailyRate, 4)} / day
+                {fmtZk(dailyRate, 5)} / day
               </div>
             </div>
           </div>
@@ -78,14 +105,13 @@ function Index() {
               <div className="glass max-w-xs rounded-2xl p-4 text-center">
                 <div className="text-sm font-semibold">Empty facility</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  Deploy your first Starter Miner to begin generating zkLTC.
+                  Deploy your first Basic USB Miner for just 0.01 zkLTC to begin.
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Player panel */}
         <div className="flex flex-col gap-3">
           <PlayerPanel
             balance={balance}
@@ -98,9 +124,9 @@ function Index() {
           <button
             onClick={() => {
               try {
-                claim();
+                const amount = claim();
                 toast.success("Rewards claimed", {
-                  description: `${fmtZk(livePending, 4)} zkLTC → wallet`,
+                  description: `${fmtZk(amount, 6)} zkLTC → wallet`,
                 });
               } catch (e) {
                 toast.error((e as Error).message);
@@ -110,7 +136,7 @@ function Index() {
             className="btn-neon-orange w-full rounded-2xl px-4 py-3 text-sm"
           >
             {canClaim
-              ? `Claim ${fmtZk(livePending, 4)} zkLTC`
+              ? `Claim ${fmtZk(livePending, 6)} zkLTC`
               : `Threshold ${WITHDRAW_THRESHOLD} zkLTC — earning…`}
           </button>
           <div className="grid grid-cols-2 gap-2">
@@ -130,23 +156,31 @@ function Index() {
         </div>
       </section>
 
+      {/* Engagement row */}
+      <section className="mt-6 grid gap-3 md:grid-cols-2">
+        <MissionsPanel player={player} />
+        <ReferralPanel address={address} player={player} />
+      </section>
+
       {/* Marketplace */}
       <section className="mt-8">
-        <div className="mb-3 flex items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <CircuitBoard className="h-4 w-4 text-sky-400" />
           <h2 className="font-display text-lg font-semibold">Rig Marketplace</h2>
           <div className="text-xs text-muted-foreground">
-            · 80% of every purchase seeds the Reward Pool, 20% funds Treasury
+            · Upgrade any rig up to L10 for +25% rate per level · 80/20 pool split
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6">
           {MINERS.map((m) => (
             <MinerCard
               key={m.id}
               miner={m}
               owned={player?.minerCounts[m.id] ?? 0}
+              level={player?.minerLevels[m.id] ?? 0}
               balance={balance}
               onBuy={buyMiner}
+              onUpgrade={upgradeMiner}
               disabled={pool.paused}
             />
           ))}
@@ -169,15 +203,15 @@ function ConnectGate() {
         <h1 className="font-display text-3xl font-bold">Enter the LiteForge</h1>
         <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
           Connect a wallet on chain <span className="font-mono neon-blue">4441</span> to spin up
-          your first zkLTC mining rig.
+          your first zkLTC rig — start from just 0.01 zkLTC.
         </p>
         <div className="mt-6 inline-flex">
           <ConnectButton />
         </div>
         <div className="mt-6 grid grid-cols-3 gap-2 text-left">
-          <Feat title="Continuous" body="Rewards accrue every second" />
-          <Feat title="Transparent" body="80% pool · 20% treasury" />
-          <Feat title="On-chain" body="MiningManager smart contract" />
+          <Feat title="Low entry" body="Basic USB Miner from 0.01 zkLTC" />
+          <Feat title="Upgrade" body="Level rigs up to L10 · +25% each" />
+          <Feat title="Refer" body="5% referral bonus from treasury" />
         </div>
       </div>
     </main>
@@ -218,7 +252,7 @@ function PlayerPanel({
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
         <Row label="Balance" value={`${fmtZk(balance, 4)} zkLTC`} />
         <Row label="Pending" value={`${fmtZk(pending, 6)}`} accent="orange" mono />
-        <Row label="Rate / day" value={fmtZk(dailyRate, 4)} accent="blue" mono />
+        <Row label="Rate / day" value={fmtZk(dailyRate, 5)} accent="blue" mono />
         <Row label="Lifetime" value={fmtZk(lifetime, 4)} mono />
         <Row label="Invested" value={fmtZk(invested, 2)} mono />
         <Row
