@@ -92,10 +92,13 @@ function Leaderboard() {
               <th className="px-4 py-3 text-right">HW Eff</th>
               <th className="px-4 py-3 text-right">ROI %</th>
               <th className="px-4 py-3 text-right">Uptime (h)</th>
+              <th className="px-4 py-3 text-right">Days</th>
+              <th className="px-4 py-3 text-right">Streak</th>
               <th className="px-4 py-3 text-right">Power / day</th>
               <th className="px-4 py-3 text-right">Claimed</th>
-              <th className="px-4 py-3 text-right">Invested</th>
+              <th className="px-4 py-3 text-right">Contrib.</th>
               <th className="px-4 py-3 text-right">Refs</th>
+
             </tr>
           </thead>
           <tbody>
