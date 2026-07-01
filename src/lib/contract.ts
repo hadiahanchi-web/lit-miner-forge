@@ -135,7 +135,6 @@ export const MINING_MANAGER_ABI = [
       { name: "unlockRequiresId", type: "uint256" },
       { name: "unlockMinInvested", type: "uint256" },
       { name: "active", type: "bool" },
-      { name: "totalMintedGlobal", type: "uint256" },
     ],
   },
   {
