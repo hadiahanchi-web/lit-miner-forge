@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 import { useLeaderboard } from "@/lib/mining-state";
+import { playerLevel } from "@/lib/miners";
 import { fmtZk, shortAddr } from "@/lib/format";
 import { Trophy } from "lucide-react";
 
@@ -15,12 +16,13 @@ export const Route = createFileRoute("/leaderboard")({
   component: Leaderboard,
 });
 
-type SortKey = "power" | "claimed" | "invested" | "minerCount";
+type SortKey = "power" | "claimed" | "invested" | "minerCount" | "level";
 const SORT_LABEL: Record<SortKey, string> = {
   power: "Mining power",
   claimed: "Lifetime rewards",
   invested: "Investment",
   minerCount: "Miner count",
+  level: "Player level",
 };
 
 function Leaderboard() {
@@ -37,6 +39,7 @@ function Leaderboard() {
         claimed: r.lifetimeRewards,
         invested: r.totalInvested,
         referrals: r.referrals.length,
+        level: playerLevel(r.totalInvested),
       }))
       .sort((a, b) => (b[sort] as number) - (a[sort] as number));
   }, [rows, sort]);
@@ -71,6 +74,7 @@ function Leaderboard() {
             <tr>
               <th className="px-4 py-3 text-left">#</th>
               <th className="px-4 py-3 text-left">Wallet</th>
+              <th className="px-4 py-3 text-right">Lv</th>
               <th className="px-4 py-3 text-right">Miners</th>
               <th className="px-4 py-3 text-right">Power / day</th>
               <th className="px-4 py-3 text-right">Claimed</th>
@@ -81,7 +85,7 @@ function Leaderboard() {
           <tbody>
             {enriched.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
                   No miners yet. Be the first to deploy a rig.
                 </td>
               </tr>
@@ -111,6 +115,7 @@ function Leaderboard() {
                   <td className="px-4 py-3 font-mono text-xs">
                     {shortAddr(r.address)} {me && <span className="ml-1 text-sky-400">· you</span>}
                   </td>
+                  <td className="px-4 py-3 text-right font-mono neon-blue">{r.level}</td>
                   <td className="px-4 py-3 text-right font-mono">{r.minerCount}</td>
                   <td className="px-4 py-3 text-right font-mono neon-blue">{fmtZk(r.power, 5)}</td>
                   <td className="px-4 py-3 text-right font-mono neon-orange">
