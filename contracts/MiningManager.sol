@@ -232,6 +232,58 @@ contract MiningManager {
         return p.pending + (dt * p.ratePerSecond * emissionRatePerSecondGlobal) / 10000;
     }
 
+    function getPlayer(address who) external view returns (
+        bool registered,
+        uint256 totalInvested,
+        uint256 lifetimeRewards,
+        uint256 lastUpdate,
+        uint256 pending,
+        uint256 ratePerSecond,
+        uint256[] memory minerCounts,
+        uint256[] memory minerLevels
+    ) {
+        Player storage p = players[who];
+        return (
+            p.registered,
+            p.totalInvested,
+            p.lifetimeRewards,
+            p.lastUpdate,
+            p.pending,
+            p.ratePerSecond,
+            p.minerCounts,
+            p.minerLevels
+        );
+    }
+
+    function getMiner(uint256 id) external view returns (
+        uint256 price,
+        uint256 basePrice,
+        uint256 ratePerSecond,
+        uint256 unlockRequiresId,
+        uint256 unlockMinInvested,
+        bool active,
+        uint256 totalMintedGlobal
+    ) {
+        MinerType memory m = miners[id];
+        return (
+            currentPrice(id),
+            m.price,
+            m.ratePerSecond,
+            m.unlockRequiresId,
+            m.unlockMinInvested,
+            m.active,
+            totalMinted[id]
+        );
+    }
+
+    function minersCount() external view returns (uint256) {
+        return miners.length;
+    }
+
+    function playersCount() external view returns (uint256) {
+        return playerList.length;
+    }
+
     // ---------- ADMIN ----------
     function setEmission(uint256 bps) external onlyOwner {
         require(bps <= 100000, "too high");

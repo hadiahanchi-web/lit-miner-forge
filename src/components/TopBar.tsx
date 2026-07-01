@@ -1,6 +1,6 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Link } from "@tanstack/react-router";
-import { Pickaxe, Trophy, ShieldCheck } from "lucide-react";
+import { Pickaxe, Trophy, ShieldCheck, ShoppingBag, Gauge } from "lucide-react";
 import { useAccount, useBalance } from "wagmi";
 import { useMiningState } from "@/lib/mining-state";
 import { fmtZk } from "@/lib/format";
@@ -27,6 +27,8 @@ export function TopBar() {
 
         <nav className="ml-4 hidden gap-1 md:flex">
           <NavLink to="/" label="Mine" />
+          <NavLink to="/shop" label="Shop" icon={<ShoppingBag className="h-3.5 w-3.5" />} />
+          <NavLink to="/dashboard" label="Dashboard" icon={<Gauge className="h-3.5 w-3.5" />} />
           <NavLink to="/leaderboard" label="Leaderboard" icon={<Trophy className="h-3.5 w-3.5" />} />
           <NavLink to="/admin" label="Admin" icon={<ShieldCheck className="h-3.5 w-3.5" />} />
         </nav>
