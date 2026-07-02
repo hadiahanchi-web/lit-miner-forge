@@ -322,3 +322,16 @@ function PoolStat({
     </div>
   );
 }
+
+function Badge({ tone, children }: { tone: "ok" | "warn" | "err"; children: React.ReactNode }) {
+  const cls =
+    tone === "err"
+      ? "border-red-500/40 bg-red-500/10 text-red-200"
+      : tone === "warn"
+        ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-200"
+        : "border-sky-500/40 bg-sky-500/10 neon-blue";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 ${cls}`}>
+      {children}
+    </span>
+  );
