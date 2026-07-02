@@ -3,23 +3,11 @@ import { useEffect, useState } from "react";
 import {
   useAccount,
   useReadContract,
-  useReadContracts,
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
-import { parseEther } from "viem";
 import { toast } from "sonner";
-import {
-  Loader2,
-  Pause,
-  Play,
-  Plus,
-  ShieldAlert,
-  ShieldCheck,
-  Trash2,
-  UserPlus,
-  Wallet2,
-} from "lucide-react";
+import { Loader2, Pause, Play, ShieldAlert, ShieldCheck } from "lucide-react";
 
 import { MINING_MANAGER_ABI, MINING_MANAGER_ADDRESS } from "@/lib/contract";
 import { CONTRACT_DEPLOYED, useBlockRefetch, usePoolInfo } from "@/lib/onchain";
@@ -28,21 +16,16 @@ import { MOBILE_NAV_VARIANTS, useMobileNavVariant } from "@/lib/mobile-nav";
 
 const contract = { address: MINING_MANAGER_ADDRESS, abi: MINING_MANAGER_ABI } as const;
 
-function useIsAuthorizedAdmin(address?: `0x${string}`) {
-  const { data, isLoading } = useReadContracts({
-    contracts: address
-      ? [
-          { ...contract, functionName: "owner" },
-          { ...contract, functionName: "admins", args: [address] },
-        ]
-      : [],
+function useIsAuthorizedOwner(address?: `0x${string}`) {
+  const { data, isLoading } = useReadContract({
+    ...contract,
+    functionName: "owner",
     query: { enabled: !!address && CONTRACT_DEPLOYED, refetchInterval: 6000 },
   });
-  const owner = (data?.[0]?.result as `0x${string}` | undefined) ?? undefined;
-  const isAdmin = (data?.[1]?.result as boolean | undefined) ?? false;
+  const owner = (data as `0x${string}` | undefined) ?? undefined;
   const isOwner =
     !!address && !!owner && address.toLowerCase() === owner.toLowerCase();
-  return { isAuthorized: isOwner || isAdmin, isOwner, owner, isLoading };
+  return { isAuthorized: isOwner, isOwner, owner, isLoading };
 }
 
 export default function Admin() {
@@ -52,13 +35,18 @@ export default function Admin() {
   );
   useBlockRefetch();
   const { address } = useAccount();
-  const { isAuthorized, isOwner, owner, isLoading } = useIsAuthorizedAdmin(address);
+  const { isAuthorized, isOwner, owner, isLoading } = useIsAuthorizedOwner(address);
   const {
     rewardPool,
     treasury,
+    availablePool,
+    reservedPool,
     miningPaused,
     withdrawPaused,
     emissionBps,
+    emissionMax,
+    emissionX,
+    isLowEmission,
   } = usePoolInfo();
 
   if (!address) {
@@ -79,7 +67,7 @@ export default function Admin() {
     return (
       <main className="mx-auto max-w-2xl px-4 py-16 text-center">
         <Loader2 className="mx-auto h-6 w-6 animate-spin text-sky-400" />
-        <p className="mt-2 text-sm text-muted-foreground">Verifying admin permissions…</p>
+        <p className="mt-2 text-sm text-muted-foreground">Verifying owner permissions…</p>
       </main>
     );
   }
@@ -90,7 +78,7 @@ export default function Admin() {
           <ShieldAlert className="mx-auto h-10 w-10 text-red-400" />
           <h1 className="mt-3 font-display text-xl font-semibold">Access denied</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            The admin panel is restricted to the on-chain contract owner and approved admin wallets.
+            The admin panel is restricted to the on-chain contract owner.
           </p>
           <div className="mt-4 space-y-1 font-mono text-[11px] text-muted-foreground">
             <div>You: {address}</div>
@@ -109,46 +97,49 @@ export default function Admin() {
         <span className="ml-2 rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] uppercase tracking-widest neon-blue">
           on-chain
         </span>
-        <span
-          className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-widest ${
-            isOwner
-              ? "border-orange-500/40 bg-orange-500/10 neon-orange"
-              : "border-white/10 bg-white/5 text-muted-foreground"
-          }`}
-        >
-          {isOwner ? "owner" : "admin"}
+        <span className="rounded-full border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-[10px] uppercase tracking-widest neon-orange">
+          owner
         </span>
+        {isLowEmission && (
+          <span className="rounded-full border border-yellow-500/40 bg-yellow-500/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-yellow-200">
+            ⚠️ Low Rewards Mode
+          </span>
+        )}
       </div>
 
       <section className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Reward Pool" value={`${fmtBig(rewardPool, 4)} zkLTC`} accent="blue" />
+        <StatCard label="Available Pool" value={`${fmtBig(availablePool, 4)} zkLTC`} accent="blue" />
+        <StatCard label="Reserved (10%)" value={`${fmtBig(reservedPool, 4)} zkLTC`} />
         <StatCard label="Treasury" value={`${fmtBig(treasury, 4)} zkLTC`} accent="orange" />
-        <StatCard label="Emission" value={`${(Number(emissionBps) / 100).toFixed(2)}%`} />
-        <StatCard label="Status" value={miningPaused ? "PAUSED" : "LIVE"} accent={miningPaused ? "orange" : "blue"} />
+        <StatCard label="Emission" value={`${emissionX.toFixed(2)}x · ${(Number(emissionBps) / 100).toFixed(2)}%`} />
+        <StatCard label="Emission max" value={`${(Number(emissionMax) / 100).toFixed(0)}%`} />
+        <StatCard label="Mining" value={miningPaused ? "PAUSED" : "LIVE"} accent={miningPaused ? "orange" : "blue"} />
+        <StatCard label="Withdrawals" value={withdrawPaused ? "PAUSED" : "LIVE"} accent={withdrawPaused ? "orange" : "blue"} />
       </section>
+
+      <div className="mb-4 rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-muted-foreground">
+        <b className="text-foreground">Dynamic emission:</b> the contract auto-scales emission based on
+        TVL (rewardPool). As pool grows toward the TVL cap, emission decays from{" "}
+        <span className="neon-blue">{(Number(emissionMax) / 100).toFixed(0)}%</span> → the configured
+        minimum. No manual setter is available in v6.
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <CircuitBreakers miningPaused={miningPaused} withdrawPaused={withdrawPaused} />
-        <FundPool />
-        <EmissionCard current={emissionBps} />
         <MobileNavCard />
-        {isOwner && <AdminManagement />}
-        {isOwner && <TreasuryWithdraw treasury={treasury} />}
       </div>
     </main>
   );
 }
 
-// ---------- Shared write helper ----------
 function useContractWrite(label: string) {
   const { writeContractAsync, isPending } = useWriteContract();
   const [hash, setHash] = useState<`0x${string}` | undefined>();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
-
   useEffect(() => {
     if (isSuccess) toast.success(`${label} confirmed`);
   }, [isSuccess, label]);
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function send(args: any) {
     try {
@@ -162,11 +153,9 @@ function useContractWrite(label: string) {
       throw e;
     }
   }
-
   return { send, busy: isPending || isConfirming };
 }
 
-// ---------- Circuit Breakers ----------
 function CircuitBreakers({
   miningPaused,
   withdrawPaused,
@@ -176,7 +165,6 @@ function CircuitBreakers({
 }) {
   const { send: mineTx, busy: mining } = useContractWrite("Mining toggle");
   const { send: wdTx, busy: wd } = useContractWrite("Withdraw toggle");
-
   return (
     <div className="glass rounded-2xl p-5">
       <h2 className="font-display text-sm font-semibold">Circuit breakers</h2>
@@ -189,11 +177,7 @@ function CircuitBreakers({
           paused={miningPaused}
           busy={mining}
           onClick={() =>
-            mineTx({
-              ...contract,
-              functionName: "setMiningPaused",
-              args: [!miningPaused],
-            })
+            mineTx({ ...contract, functionName: "setMiningPaused", args: [!miningPaused] })
           }
         />
         <Toggle
@@ -201,11 +185,7 @@ function CircuitBreakers({
           paused={withdrawPaused}
           busy={wd}
           onClick={() =>
-            wdTx({
-              ...contract,
-              functionName: "setWithdrawPaused",
-              args: [!withdrawPaused],
-            })
+            wdTx({ ...contract, functionName: "setWithdrawPaused", args: [!withdrawPaused] })
           }
         />
       </div>
@@ -249,252 +229,34 @@ function Toggle({
   );
 }
 
-// ---------- Fund Pool ----------
-function FundPool() {
-  const [amount, setAmount] = useState("");
-  const { send, busy } = useContractWrite("Fund pool");
-
+function MobileNavCard() {
+  const [variant, setVariant] = useMobileNavVariant();
   return (
     <div className="glass rounded-2xl p-5">
-      <h2 className="font-display text-sm font-semibold">Fund Reward Pool</h2>
+      <h2 className="font-display text-sm font-semibold">Mobile navigation style</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        Send zkLTC directly to the on-chain reward pool.
+        Choose how the mobile menu appears. Applies instantly to all clients on this device.
       </p>
-      <div className="mt-3 flex gap-2">
-        <input
-          type="number"
-          min="0"
-          step="0.001"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="Amount (zkLTC)"
-          className="flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm font-mono outline-none placeholder:text-muted-foreground focus:border-sky-500/60"
-        />
-        <button
-          disabled={busy}
-          onClick={async () => {
-            const n = Number(amount);
-            if (!isFinite(n) || n <= 0) return toast.error("Enter a positive amount");
-            try {
-              await send({
-                ...contract,
-                functionName: "fundRewardPool",
-                value: parseEther(amount as `${number}`),
-              });
-              setAmount("");
-            } catch {}
-          }}
-          className="btn-neon inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm disabled:opacity-50"
-        >
-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Fund
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ---------- Emission ----------
-function EmissionCard({ current }: { current: bigint }) {
-  const [bps, setBps] = useState<number>(Number(current) || 10000);
-  useEffect(() => {
-    setBps(Number(current) || 10000);
-  }, [current]);
-  const { send, busy } = useContractWrite("Set emission");
-
-  return (
-    <div className="glass rounded-2xl p-5">
-      <h2 className="font-display text-sm font-semibold">Emission multiplier</h2>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Global multiplier applied to per-second rates (bps · max 100000 = 10×).
-      </p>
-      <div className="mt-4">
-        <div className="flex justify-between text-[10px] uppercase tracking-widest text-muted-foreground">
-          <span>Value</span>
-          <span className="font-mono neon-blue">
-            {(bps / 100).toFixed(2)}% · {bps} bps
-          </span>
-        </div>
-        <input
-          type="range"
-          min={0}
-          max={100000}
-          step={100}
-          value={bps}
-          onChange={(e) => setBps(Number(e.target.value))}
-          className="w-full accent-sky-400"
-        />
-        <div className="mt-2 flex items-center gap-2">
-          <input
-            type="number"
-            min={1}
-            max={100000}
-            step={1}
-            value={bps}
-            onChange={(e) => {
-              const v = Math.floor(Number(e.target.value));
-              if (!isFinite(v)) return;
-              setBps(Math.max(1, Math.min(100000, v)));
-            }}
-            className="flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs outline-none focus:border-sky-500/60"
-            placeholder="bps (1–100000)"
-          />
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">bps</span>
-        </div>
-      </div>
-
-      <button
-        disabled={busy}
-        onClick={() =>
-          send({
-            ...contract,
-            functionName: "setEmission",
-            args: [BigInt(bps)],
-          })
-        }
-        className="btn-neon mt-3 w-full rounded-xl px-3 py-2 text-sm disabled:opacity-50"
-      >
-        {busy ? "Confirming…" : "Save emission"}
-      </button>
-    </div>
-  );
-}
-
-// ---------- Admin Management ----------
-function AdminManagement() {
-  const [addr, setAddr] = useState("");
-  const [removeAddr, setRemoveAddr] = useState("");
-  const { send: add, busy: addBusy } = useContractWrite("Add admin");
-  const { send: rm, busy: rmBusy } = useContractWrite("Remove admin");
-
-  const isValid = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v);
-
-  return (
-    <div className="glass rounded-2xl p-5 md:col-span-2">
-      <h2 className="font-display text-sm font-semibold">Admin management (owner only)</h2>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Grant or revoke admin privileges on-chain.
-      </p>
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <div className="flex gap-2">
-          <input
-            value={addr}
-            onChange={(e) => setAddr(e.target.value)}
-            placeholder="0x… address to add"
-            className="flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs outline-none focus:border-sky-500/60"
-          />
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {MOBILE_NAV_VARIANTS.map((v) => (
           <button
-            disabled={addBusy || !isValid(addr)}
-            onClick={async () => {
-              try {
-                await add({
-                  ...contract,
-                  functionName: "addAdmin",
-                  args: [addr as `0x${string}`],
-                });
-                setAddr("");
-              } catch {}
-            }}
-            className="btn-neon inline-flex items-center gap-1 rounded-xl px-3 py-2 text-xs disabled:opacity-40"
+            key={v.id}
+            onClick={() => setVariant(v.id)}
+            className={`rounded-xl border px-2 py-3 text-xs transition ${
+              variant === v.id
+                ? "border-sky-500/60 bg-sky-500/10 neon-blue"
+                : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+            }`}
           >
-            <UserPlus className="h-3.5 w-3.5" /> Add
+            <div className="font-semibold">{v.label}</div>
+            <div className="mt-0.5 text-[10px] text-muted-foreground">{v.description}</div>
           </button>
-        </div>
-        <div className="flex gap-2">
-          <input
-            value={removeAddr}
-            onChange={(e) => setRemoveAddr(e.target.value)}
-            placeholder="0x… address to remove"
-            className="flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs outline-none focus:border-sky-500/60"
-          />
-          <button
-            disabled={rmBusy || !isValid(removeAddr)}
-            onClick={async () => {
-              try {
-                await rm({
-                  ...contract,
-                  functionName: "removeAdmin",
-                  args: [removeAddr as `0x${string}`],
-                });
-                setRemoveAddr("");
-              } catch {}
-            }}
-            className="inline-flex items-center gap-1 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200 hover:bg-red-500/20 disabled:opacity-40"
-          >
-            <Trash2 className="h-3.5 w-3.5" /> Remove
-          </button>
-        </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// ---------- Treasury Withdraw ----------
-function TreasuryWithdraw({ treasury }: { treasury: bigint }) {
-  const [to, setTo] = useState("");
-  const [amount, setAmount] = useState("");
-  const { send, busy } = useContractWrite("Withdraw treasury");
-  const { address } = useAccount();
-
-  const { data: liveTreasury } = useReadContract({
-    ...contract,
-    functionName: "treasury",
-    query: { refetchInterval: 5000 },
-  });
-  const t = (liveTreasury as bigint | undefined) ?? treasury;
-
-  return (
-    <div className="glass rounded-2xl p-5 md:col-span-2">
-      <h2 className="font-display text-sm font-semibold">Treasury withdraw (owner only)</h2>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Available: <span className="font-mono neon-orange">{fmtBig(t, 6)} zkLTC</span>
-      </p>
-      <div className="mt-3 grid gap-2 md:grid-cols-[1fr_180px_auto]">
-        <input
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          placeholder="Recipient 0x…"
-          className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs outline-none focus:border-sky-500/60"
-        />
-        <input
-          type="number"
-          min="0"
-          step="0.001"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="Amount"
-          className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs outline-none focus:border-sky-500/60"
-        />
-        <button
-          disabled={busy}
-          onClick={async () => {
-            const n = Number(amount);
-            if (!/^0x[a-fA-F0-9]{40}$/.test(to)) return toast.error("Invalid recipient");
-            if (!isFinite(n) || n <= 0) return toast.error("Invalid amount");
-            try {
-              await send({
-                ...contract,
-                functionName: "withdrawTreasury",
-                args: [to as `0x${string}`, parseEther(amount as `${number}`)],
-              });
-              setAmount("");
-            } catch {}
-          }}
-          className="btn-neon-orange inline-flex items-center gap-1 rounded-xl px-3 py-2 text-xs disabled:opacity-40"
-        >
-          <Wallet2 className="h-3.5 w-3.5" /> Withdraw
-        </button>
-      </div>
-      <button
-        onClick={() => setTo(address ?? "")}
-        className="mt-2 text-[11px] text-muted-foreground underline"
-      >
-        Use my address
-      </button>
-    </div>
-  );
-}
-
-// ---------- Stat ----------
 function StatCard({
   label,
   value,
@@ -506,52 +268,13 @@ function StatCard({
 }) {
   return (
     <div className="glass rounded-2xl p-4">
-      <div className="text-[9px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
       <div
         className={`mt-1 font-mono text-sm font-semibold ${
-          accent === "blue" ? "neon-blue" : accent === "orange" ? "neon-orange" : "text-foreground"
+          accent === "orange" ? "neon-orange" : accent === "blue" ? "neon-blue" : "text-foreground"
         }`}
       >
         {value}
-      </div>
-    </div>
-  );
-}
-
-// ---------- Mobile Nav Selector ----------
-function MobileNavCard() {
-  const [variant, setVariant] = useMobileNavVariant();
-  return (
-    <div className="glass rounded-2xl p-5">
-      <h2 className="font-display text-sm font-semibold">Mobile navigation style</h2>
-      <p className="mt-1 text-xs text-muted-foreground">
-        استایل ناوبار موبایل را برای همه کاربران انتخاب کنید. تغییر بلافاصله اعمال می‌شود.
-      </p>
-      <div className="mt-3 space-y-2">
-        {MOBILE_NAV_VARIANTS.map((v) => {
-          const active = variant === v.id;
-          return (
-            <button
-              key={v.id}
-              onClick={() => setVariant(v.id)}
-              className={`flex w-full items-start justify-between gap-3 rounded-xl border px-4 py-3 text-left text-sm transition ${
-                active
-                  ? "border-sky-500/50 bg-sky-500/10 neon-blue"
-                  : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-              }`}
-            >
-              <div>
-                <div className="font-semibold">{v.label}</div>
-                <div className="mt-0.5 text-[11px] opacity-80">{v.description}</div>
-              </div>
-              <span
-                className={`mt-1 h-3 w-3 shrink-0 rounded-full border ${
-                  active ? "border-sky-400 bg-sky-400" : "border-white/30"
-                }`}
-              />
-            </button>
-          );
-        })}
       </div>
     </div>
   );
