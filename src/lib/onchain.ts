@@ -5,22 +5,17 @@ import { MINING_MANAGER_ABI, MINING_MANAGER_ADDRESS } from "./contract";
 
 const contract = { address: MINING_MANAGER_ADDRESS, abi: MINING_MANAGER_ABI } as const;
 
-/** True when the connected wallet is the contract owner or an approved admin. */
+/** True when the connected wallet is the contract owner. (v6 has no admin role.) */
 export function useIsAdmin() {
   const { address } = useAccount();
-  const { data, isLoading } = useReadContracts({
-    contracts: address
-      ? [
-          { ...contract, functionName: "owner" },
-          { ...contract, functionName: "admins", args: [address] },
-        ]
-      : [],
+  const { data, isLoading } = useReadContract({
+    ...contract,
+    functionName: "owner",
     query: { enabled: !!address, refetchInterval: 8000 },
   });
-  const owner = (data?.[0]?.result as `0x${string}` | undefined) ?? undefined;
-  const isAdminFlag = (data?.[1]?.result as boolean | undefined) ?? false;
+  const owner = (data as `0x${string}` | undefined) ?? undefined;
   const isOwner = !!address && !!owner && address.toLowerCase() === owner.toLowerCase();
-  return { isAdmin: isOwner || isAdminFlag, isOwner, owner, isLoading };
+  return { isAdmin: isOwner, isOwner, owner, isLoading };
 }
 
 /** Auto-refresh all wagmi reads on every new block. */
@@ -41,11 +36,20 @@ export function usePoolInfo() {
       { ...contract, functionName: "miningPaused" },
       { ...contract, functionName: "withdrawPaused" },
       { ...contract, functionName: "WITHDRAW_THRESHOLD" },
-      { ...contract, functionName: "MAX_CLAIM_POOL_BPS" },
       { ...contract, functionName: "MAINTENANCE_BPS" },
-      { ...contract, functionName: "emissionRatePerSecondGlobal" },
+      { ...contract, functionName: "getEmissionBps" },
+      { ...contract, functionName: "getAvailablePool" },
+      { ...contract, functionName: "getReservedPool" },
+      { ...contract, functionName: "MIN_POOL_RESERVE_BPS" },
+      { ...contract, functionName: "MAX_PLAYER_SHARE_BPS" },
+      { ...contract, functionName: "EMISSION_MAX_BPS" },
+      { ...contract, functionName: "EMISSION_MIN_BPS" },
+      { ...contract, functionName: "TVL_CAP" },
     ],
   });
+  const emissionBps = (data?.[6]?.result as bigint | undefined) ?? 10000n;
+  const emissionMax = (data?.[11]?.result as bigint | undefined) ?? 10000n;
+  const emissionMin = (data?.[12]?.result as bigint | undefined) ?? 500n;
   return {
     isLoading,
     rewardPool: (data?.[0]?.result as bigint | undefined) ?? 0n,
@@ -53,9 +57,18 @@ export function usePoolInfo() {
     miningPaused: (data?.[2]?.result as boolean | undefined) ?? false,
     withdrawPaused: (data?.[3]?.result as boolean | undefined) ?? false,
     withdrawThreshold: (data?.[4]?.result as bigint | undefined) ?? 0n,
-    maxClaimPoolBps: (data?.[5]?.result as bigint | undefined) ?? 0n,
-    maintenanceBps: (data?.[6]?.result as bigint | undefined) ?? 0n,
-    emissionBps: (data?.[7]?.result as bigint | undefined) ?? 10000n,
+    maintenanceBps: (data?.[5]?.result as bigint | undefined) ?? 0n,
+    emissionBps,
+    availablePool: (data?.[7]?.result as bigint | undefined) ?? 0n,
+    reservedPool: (data?.[8]?.result as bigint | undefined) ?? 0n,
+    poolReserveBps: (data?.[9]?.result as bigint | undefined) ?? 1000n,
+    maxPlayerShareBps: (data?.[10]?.result as bigint | undefined) ?? 1500n,
+    emissionMax,
+    emissionMin,
+    tvlCap: (data?.[13]?.result as bigint | undefined) ?? 0n,
+    // Emission "x" multiplier (relative to EMISSION_MAX = 1x)
+    emissionX: emissionMax > 0n ? Number(emissionBps) / Number(emissionMax) : 1,
+    isLowEmission: emissionBps * 2n < emissionMax, // < 50% of max
   };
 }
 
@@ -167,6 +180,28 @@ export function useCooldown() {
   };
 }
 
+/** Reads global total power + player's power for anti-whale share calculation. */
+export function useWhaleShare() {
+  const { address } = useAccount();
+  const { player } = usePlayer();
+  const { data: totalPower } = useReadContract({
+    ...contract,
+    functionName: "totalPower",
+    query: { enabled: !!address, refetchInterval: 6000 },
+  });
+  const { maxPlayerShareBps } = usePoolInfo();
+  const total = (totalPower as bigint | undefined) ?? 0n;
+  const my = player?.ratePerSecond ?? 0n;
+  const shareBps = total > 0n ? Number((my * 10000n) / total) : 0;
+  const limitBps = Number(maxPlayerShareBps);
+  return {
+    shareBps,
+    limitBps,
+    isWhaleBlocked: total > 0n && shareBps > limitBps,
+    isWhaleWarn: total > 0n && shareBps > limitBps * 0.8,
+  };
+}
+
 export const CONTRACT_DEPLOYED =
   (MINING_MANAGER_ADDRESS as string) !== "0x0000000000000000000000000000000000000000";
 
@@ -229,5 +264,3 @@ export function useLeaderboard() {
 
   return { rows, isLoading, playersCount: n };
 }
-
-
