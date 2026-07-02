@@ -21,6 +21,7 @@ import {
   usePendingRewards,
   usePlayer,
   usePoolInfo,
+  useWhaleShare,
 } from "@/lib/onchain";
 import { fmtBig, bigMin } from "@/lib/bigformat";
 import { shortAddr } from "@/lib/format";
@@ -37,23 +38,32 @@ export default function DashboardPage() {
   const {
     rewardPool,
     treasury,
+    availablePool,
+    reservedPool,
     withdrawPaused,
     withdrawThreshold,
-    maxClaimPoolBps,
     maintenanceBps,
     emissionBps,
+    emissionX,
+    isLowEmission,
   } = usePoolInfo();
   const { isAdmin } = useIsAdmin();
+  const whale = useWhaleShare();
 
   // Contract-derived claim math (view-only mirror of claimRewards logic)
-  const poolCap = (rewardPool * maxClaimPoolBps) / 10_000n;
-  const gross = bigMin(bigMin(pending, rewardPool), poolCap);
+  const gross = bigMin(pending, availablePool);
   const fee = (gross * maintenanceBps) / 10_000n;
   const net = gross - fee;
+  const poolLocked = availablePool === 0n;
 
   const meetsThreshold = pending >= withdrawThreshold;
   const canClaim =
-    isConnected && !withdrawPaused && meetsThreshold && gross > 0n && CONTRACT_DEPLOYED;
+    isConnected &&
+    !withdrawPaused &&
+    meetsThreshold &&
+    gross > 0n &&
+    !whale.isWhaleBlocked &&
+    CONTRACT_DEPLOYED;
 
   const { writeContractAsync, isPending } = useWriteContract();
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
@@ -95,28 +105,57 @@ export default function DashboardPage() {
         </div>
       )}
 
+      <section className="mb-3 flex flex-wrap gap-2 text-[11px]">
+        <StatusBadge
+          tone={isLowEmission ? "warn" : "ok"}
+          label={`Emission ${emissionX.toFixed(2)}x`}
+          hint={isLowEmission ? "⚠️ Low Rewards Mode" : "Nominal"}
+        />
+        <StatusBadge
+          tone={poolLocked ? "warn" : "ok"}
+          label={`Pool ${poolLocked ? "Locked" : "Live"}`}
+          hint={poolLocked ? "⚠️ Pool Protected" : "10% reserve intact"}
+        />
+        {whale.isWhaleBlocked && (
+          <StatusBadge tone="err" label="❌ Whale limit reached" hint="Reduce mining power" />
+        )}
+        {!whale.isWhaleBlocked && whale.isWhaleWarn && (
+          <StatusBadge tone="warn" label="🐋 Near whale cap" hint={`${(whale.shareBps / 100).toFixed(2)}% of ${(whale.limitBps / 100).toFixed(0)}%`} />
+        )}
+      </section>
+
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={<Wallet2 className="h-4 w-4" />} label="Wallet balance"
           value={`${fmtBig(bal?.value ?? 0n, 4)} zkLTC`} />
         <StatCard icon={<Coins className="h-4 w-4 text-orange-400" />} label="Pending rewards"
           value={`${fmtBig(pending, 6)} zkLTC`} accent="orange" />
-        <StatCard icon={<Zap className="h-4 w-4 text-yellow-300" />} label="Rate / sec"
-          value={fmtBig(((player?.ratePerSecond ?? 0n) * emissionBps) / 10000n, 8)} />
+        <StatCard
+          icon={<Zap className="h-4 w-4 text-yellow-300" />}
+          label={`Rewards Rate · ${emissionX.toFixed(2)}x`}
+          value={fmtBig(((player?.ratePerSecond ?? 0n) * emissionBps) / 10000n, 8)}
+        />
         <StatCard icon={<TrendingUp className="h-4 w-4 text-emerald-400" />} label="Lifetime rewards"
           value={`${fmtBig(player?.lifetimeRewards ?? 0n, 4)} zkLTC`} />
+      </section>
+
+      <section className="mt-4 grid gap-3 sm:grid-cols-3">
+        <StatCard label="Reward Pool (total)" value={`${fmtBig(rewardPool, 4)} zkLTC`} accent="blue" />
+        <StatCard label="Available Pool" value={`${fmtBig(availablePool, 4)} zkLTC`} accent="blue" />
+        <StatCard label="Reserved Pool (10%)" value={`${fmtBig(reservedPool, 4)} zkLTC`} accent="orange" />
       </section>
 
       <section className={`mt-4 grid gap-4 ${isAdmin ? "lg:grid-cols-3" : ""}`}>
         <div className={`glass rounded-2xl p-5 ${isAdmin ? "lg:col-span-2" : ""}`}>
           <h2 className="font-display text-lg font-semibold">Claim Rewards</h2>
           <p className="text-xs text-muted-foreground">
-            Threshold, pool cap and maintenance fee are enforced by the contract.
+            Payout is capped at the Available Pool (Reward Pool − 10% reserve). A {Number(maintenanceBps) / 100}%
+            maintenance fee returns to the treasury.
           </p>
 
           <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
             <Row label="Pending (on-chain)" value={`${fmtBig(pending, 6)} zkLTC`} />
             <Row label="Withdraw threshold" value={`${fmtBig(withdrawThreshold, 6)} zkLTC`} />
-            <Row label="Pool cap / tx" value={`${fmtBig(poolCap, 6)} zkLTC`} />
+            <Row label="Available pool" value={`${fmtBig(availablePool, 6)} zkLTC`} />
             <Row label="Maintenance fee" value={`${Number(maintenanceBps) / 100}%`} />
             <Row label="Estimated gross" value={`${fmtBig(gross, 6)} zkLTC`} />
             <Row label="Estimated net" value={`${fmtBig(net, 6)} zkLTC`} highlight />
@@ -127,6 +166,17 @@ export default function DashboardPage() {
               <ShieldAlert className="mr-1 inline h-3.5 w-3.5" />
               Below withdraw threshold. Mine more or wait until pending ≥{" "}
               {fmtBig(withdrawThreshold, 6)} zkLTC.
+            </div>
+          )}
+          {poolLocked && (
+            <div className="mt-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200">
+              ⚠️ Pool Protected — the 10% reserve is intact so claims are locked. Wait for the pool to refill.
+            </div>
+          )}
+          {whale.isWhaleBlocked && (
+            <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+              ❌ Whale limit reached — your share ({(whale.shareBps / 100).toFixed(2)}%) exceeds the
+              {" "}{(whale.limitBps / 100).toFixed(0)}% cap. Reduce mining power before claiming.
             </div>
           )}
           {withdrawPaused && (
@@ -155,9 +205,11 @@ export default function DashboardPage() {
             <h2 className="font-display text-lg font-semibold">Pool Health</h2>
             <div className="mt-3 grid gap-2 text-sm">
               <Row label="Reward pool" value={`${fmtBig(rewardPool, 3)} zkLTC`} />
+              <Row label="Available" value={`${fmtBig(availablePool, 3)} zkLTC`} />
+              <Row label="Reserved (10%)" value={`${fmtBig(reservedPool, 3)} zkLTC`} />
               <Row label="Treasury" value={`${fmtBig(treasury, 3)} zkLTC`} />
-              <Row label="Emission" value={`${(Number(emissionBps) / 100).toFixed(2)}%`} />
-              <Row label="Total invested" value={`${fmtBig(player?.totalInvested ?? 0n, 4)} zkLTC`} />
+              <Row label="Emission" value={`${emissionX.toFixed(2)}x · ${(Number(emissionBps) / 100).toFixed(2)}%`} />
+              <Row label="Your share" value={`${(whale.shareBps / 100).toFixed(2)}% / ${(whale.limitBps / 100).toFixed(0)}%`} />
             </div>
           </div>
         )}
@@ -215,10 +267,10 @@ function StatCard({
   value,
   accent,
 }: {
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   label: string;
   value: string;
-  accent?: "orange";
+  accent?: "orange" | "blue";
 }) {
   return (
     <div className="glass rounded-2xl p-4">
@@ -226,10 +278,40 @@ function StatCard({
         {icon}
         {label}
       </div>
-      <div className={`mt-1 font-mono text-lg ${accent === "orange" ? "neon-orange" : ""}`}>
+      <div
+        className={`mt-1 font-mono text-lg ${
+          accent === "orange" ? "neon-orange" : accent === "blue" ? "neon-blue" : ""
+        }`}
+      >
         {value}
       </div>
     </div>
+  );
+}
+
+function StatusBadge({
+  tone,
+  label,
+  hint,
+}: {
+  tone: "ok" | "warn" | "err";
+  label: string;
+  hint?: string;
+}) {
+  const cls =
+    tone === "err"
+      ? "border-red-500/40 bg-red-500/10 text-red-200"
+      : tone === "warn"
+        ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-200"
+        : "border-sky-500/40 bg-sky-500/10 neon-blue";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono ${cls}`}
+      title={hint}
+    >
+      <span className="font-semibold">{label}</span>
+      {hint && <span className="opacity-70">· {hint}</span>}
+    </span>
   );
 }
 
