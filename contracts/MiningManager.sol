@@ -122,13 +122,13 @@ contract MiningManager {
 
     // ---------- ANTI-WHALE ----------
     function _checkWhale(address user) internal view {
-        uint256 totalPower = 0;
+        uint256 _totalPower = 0;
         for (uint256 i = 0; i < playerList.length; i++) {
-            totalPower += players[playerList[i]].ratePerSecond;
+            _totalPower += players[playerList[i]].ratePerSecond;
         }
-        if (totalPower == 0) return;
+        if (_totalPower == 0) return;
         uint256 shareBps =
-            (players[user].ratePerSecond * 10000) / totalPower;
+            (players[user].ratePerSecond * 10000) / _totalPower;
         require(shareBps <= MAX_PLAYER_SHARE_BPS, "whale blocked");
     }
 
