@@ -28,15 +28,23 @@ contract MiningManager {
     uint256 public constant MAINTENANCE_BPS = 500;
 
     uint256 public constant MAX_UNITS_PER_MINER = 100;
-    uint256 public constant DIMINISH_THRESHOLD = 10;
-    uint256 public constant DIMINISH_BPS = 5000;
 
-    uint256 public constant PRICE_CURVE_BPS = 12500; // 1.25x
+    // anti-whale
+    uint256 public constant MAX_PLAYER_SHARE_BPS = 1500; // 15%
+
+    // anti-collapse
+    uint256 public constant MIN_POOL_RESERVE_BPS = 1000; // 10%
+
+    // emission curve
+    uint256 public constant EMISSION_MAX_BPS = 10000; // 1x
+    uint256 public constant EMISSION_MIN_BPS = 500;   // 0.05x
+    uint256 public constant TVL_CAP = 500 ether;
+
+    uint256 public constant PRICE_CURVE_BPS = 12500;
     uint256 public constant PRICE_DEN = 10000;
     uint256 public constant PRICE_CAP = 40;
 
     uint256 public constant COOLDOWN = 3;
-    uint256 public constant MAX_CLAIM_POOL_BPS = 2000;
 
     // ---------- STATE ----------
     address public owner;
@@ -48,23 +56,18 @@ contract MiningManager {
     uint256 public rewardPool;
     uint256 public treasury;
 
-    uint256 public emissionRatePerSecondGlobal = 10_000;
-
     MinerType[] public miners;
     mapping(address => Player) private players;
     address[] public playerList;
 
     mapping(uint256 => uint256) public totalMinted;
     mapping(address => uint256) public lastAction;
-    mapping(address => bool) public admins;
 
     // ---------- EVENTS ----------
     event PlayerRegistered(address indexed player);
     event MinerPurchased(address indexed player, uint256 indexed id, uint256 price);
     event RewardsClaimed(address indexed player, uint256 gross, uint256 net, uint256 fee);
     event PoolUpdated(uint256 rewardPool, uint256 treasury);
-    event AdminAdded(address indexed newAdmin, address indexed addedBy);
-    event AdminRemoved(address indexed admin, address indexed removedBy);
 
     // ---------- MODIFIERS ----------
     modifier onlyOwner() {
@@ -81,7 +84,6 @@ contract MiningManager {
 
     constructor() {
         owner = msg.sender;
-        admins[msg.sender] = true;
 
         _addMiner(1e16, 1e12, type(uint256).max, 0);
         _addMiner(1 ether, 1e14, 0, 0);
@@ -100,27 +102,60 @@ contract MiningManager {
         miners.push(MinerType(price, rate, unlockId, minInvest, true));
     }
 
+    // ---------- EMISSION (DYNAMIC) ----------
+    function getEmissionBps() public view returns (uint256) {
+        uint256 tvl = rewardPool;
+        if (tvl >= TVL_CAP) return EMISSION_MIN_BPS;
+        return EMISSION_MAX_BPS
+            - ((tvl * (EMISSION_MAX_BPS - EMISSION_MIN_BPS)) / TVL_CAP);
+    }
+
     // ---------- CORE ----------
     function _accrue(Player storage p) internal {
         uint256 dt = block.timestamp - p.lastUpdate;
         if (dt > 0 && p.ratePerSecond > 0) {
-            p.pending += (dt * p.ratePerSecond * emissionRatePerSecondGlobal) / 10_000;
+            uint256 emission = getEmissionBps();
+            p.pending += (dt * p.ratePerSecond * emission) / 10000;
         }
         p.lastUpdate = block.timestamp;
+    }
+
+    // ---------- ANTI-WHALE ----------
+    function _checkWhale(address user) internal view {
+        uint256 totalPower = 0;
+        for (uint256 i = 0; i < playerList.length; i++) {
+            totalPower += players[playerList[i]].ratePerSecond;
+        }
+        if (totalPower == 0) return;
+        uint256 shareBps =
+            (players[user].ratePerSecond * 10000) / totalPower;
+        require(shareBps <= MAX_PLAYER_SHARE_BPS, "whale blocked");
+    }
+
+    // ---------- ANTI-COLLAPSE ----------
+    function _getAvailablePool() internal view returns (uint256) {
+        uint256 reserve = (rewardPool * MIN_POOL_RESERVE_BPS) / 10000;
+        if (rewardPool <= reserve) return 0;
+        return rewardPool - reserve;
+    }
+
+    function getAvailablePool() external view returns (uint256) {
+        return _getAvailablePool();
+    }
+
+    function getReservedPool() external view returns (uint256) {
+        return (rewardPool * MIN_POOL_RESERVE_BPS) / 10000;
     }
 
     // ---------- PRICE ----------
     function currentPrice(uint256 id) public view returns (uint256) {
         uint256 k = totalMinted[id];
         if (k > PRICE_CAP) k = PRICE_CAP;
-
         uint256 price = miners[id].price;
-
         while (k > 0) {
             price = (price * PRICE_CURVE_BPS) / PRICE_DEN;
             k--;
         }
-
         return price;
     }
 
@@ -155,13 +190,12 @@ contract MiningManager {
 
         p.minerCounts[id] += 1;
         if (p.minerLevels[id] == 0) p.minerLevels[id] = 1;
+        p.ratePerSecond += m.ratePerSecond;
 
         totalMinted[id]++;
         lastAction[msg.sender] = block.timestamp;
 
         p.totalInvested += msg.value;
-
-        _recomputeRate(p);
 
         uint256 toPool = (msg.value * 7000) / 10000;
         rewardPool += toPool;
@@ -169,29 +203,6 @@ contract MiningManager {
 
         emit MinerPurchased(msg.sender, id, msg.value);
         emit PoolUpdated(rewardPool, treasury);
-    }
-
-    // ---------- RATE ----------
-    function _effective(uint256 n) internal pure returns (uint256) {
-        if (n <= DIMINISH_THRESHOLD) return n * 10000;
-        return (DIMINISH_THRESHOLD * 10000) + ((n - DIMINISH_THRESHOLD) * DIMINISH_BPS);
-    }
-
-    function _recomputeRate(Player storage p) internal {
-        uint256 total;
-
-        for (uint256 i = 0; i < miners.length; i++) {
-            if (i >= p.minerCounts.length) break;
-
-            uint256 n = p.minerCounts[i];
-            if (n == 0) continue;
-
-            uint256 base = miners[i].ratePerSecond * _effective(n) / 10000;
-
-            total += base;
-        }
-
-        p.ratePerSecond = total;
     }
 
     // ---------- CLAIM ----------
@@ -202,14 +213,15 @@ contract MiningManager {
         require(p.registered, "not reg");
 
         _accrue(p);
+        _checkWhale(msg.sender);
 
         uint256 gross = p.pending;
         require(gross >= WITHDRAW_THRESHOLD, "low");
 
-        if (gross > rewardPool) gross = rewardPool;
+        uint256 available = _getAvailablePool();
+        require(available > 0, "pool locked");
 
-        uint256 cap = (rewardPool * MAX_CLAIM_POOL_BPS) / 10000;
-        if (gross > cap) gross = cap;
+        if (gross > available) gross = available;
 
         uint256 fee = (gross * MAINTENANCE_BPS) / 10000;
         uint256 net = gross - fee;
@@ -231,9 +243,9 @@ contract MiningManager {
     function calculateRewards(address who) external view returns (uint256) {
         Player storage p = players[who];
         if (!p.registered) return 0;
-
         uint256 dt = block.timestamp - p.lastUpdate;
-        return p.pending + (dt * p.ratePerSecond * emissionRatePerSecondGlobal) / 10000;
+        uint256 emission = getEmissionBps();
+        return p.pending + (dt * p.ratePerSecond * emission) / 10000;
     }
 
     function getPlayer(address who) external view returns (
@@ -248,14 +260,8 @@ contract MiningManager {
     ) {
         Player storage p = players[who];
         return (
-            p.registered,
-            p.totalInvested,
-            p.lifetimeRewards,
-            p.lastUpdate,
-            p.pending,
-            p.ratePerSecond,
-            p.minerCounts,
-            p.minerLevels
+            p.registered, p.totalInvested, p.lifetimeRewards, p.lastUpdate,
+            p.pending, p.ratePerSecond, p.minerCounts, p.minerLevels
         );
     }
 
@@ -269,17 +275,9 @@ contract MiningManager {
     ) {
         MinerType memory m = miners[id];
         return (
-            currentPrice(id),
-            m.price,
-            m.ratePerSecond,
-            m.unlockRequiresId,
-            m.unlockMinInvested,
-            m.active
+            currentPrice(id), m.price, m.ratePerSecond,
+            m.unlockRequiresId, m.unlockMinInvested, m.active
         );
-    }
-
-    function getMinerMinted(uint256 id) external view returns (uint256) {
-        return totalMinted[id];
     }
 
     function minersCount() external view returns (uint256) {
@@ -290,54 +288,20 @@ contract MiningManager {
         return playerList.length;
     }
 
-    // ---------- ADMIN ----------
-    function setEmission(uint256 bps) external onlyOwner {
-        require(bps >= 1 && bps <= 100000, "invalid bps");
-        emissionRatePerSecondGlobal = bps;
+    /// Sum of all players' ratePerSecond (for anti-whale share display).
+    function totalPower() external view returns (uint256 total) {
+        for (uint256 i = 0; i < playerList.length; i++) {
+            total += players[playerList[i]].ratePerSecond;
+        }
     }
 
+    // ---------- ADMIN ----------
     function setMiningPaused(bool v) external onlyOwner {
         miningPaused = v;
     }
 
     function setWithdrawPaused(bool v) external onlyOwner {
         withdrawPaused = v;
-    }
-
-    function fundRewardPool() external payable onlyOwner {
-        rewardPool += msg.value;
-        emit PoolUpdated(rewardPool, treasury);
-    }
-
-    function withdrawTreasury(address to, uint256 amount) external onlyOwner nonReentrant {
-        require(amount <= treasury, "exceeds");
-        treasury -= amount;
-        (bool ok,) = to.call{value: amount}("");
-        require(ok, "fail");
-        emit PoolUpdated(rewardPool, treasury);
-    }
-
-    function addAdmin(address newAdmin) external onlyOwner {
-        require(newAdmin != address(0), "zero");
-        require(!admins[newAdmin], "exists");
-        admins[newAdmin] = true;
-        emit AdminAdded(newAdmin, msg.sender);
-    }
-
-    function removeAdmin(address admin) external onlyOwner {
-        require(admin != owner, "owner locked");
-        require(admins[admin], "not admin");
-        admins[admin] = false;
-        emit AdminRemoved(admin, msg.sender);
-    }
-
-    function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "zero");
-        owner = newOwner;
-        if (!admins[newOwner]) {
-            admins[newOwner] = true;
-            emit AdminAdded(newOwner, msg.sender);
-        }
     }
 
     receive() external payable {
