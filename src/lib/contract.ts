@@ -1,5 +1,5 @@
 // Deploy MiningManager.sol from /contracts, then paste address here.
-export const MINING_MANAGER_ADDRESS = "0x7ff78B825445Bb36BCF71758fF2c36bCD6BEaC84" as const;
+export const MINING_MANAGER_ADDRESS = "0x55F9F3746Ed1b4043fE02f2F0E71499DEaD731A5" as const;
 
 export const MINING_MANAGER_ABI = [
   {
@@ -32,11 +32,29 @@ export const MINING_MANAGER_ABI = [
   { type: "function", name: "getEmissionBps", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "totalPower", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "WITHDRAW_THRESHOLD", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "MAX_UNITS_PER_MINER", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    type: "function",
+    name: "MAX_UNITS_PER_MINER",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
   { type: "function", name: "MAINTENANCE_BPS", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "COOLDOWN", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "MIN_POOL_RESERVE_BPS", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "MAX_PLAYER_SHARE_BPS", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    type: "function",
+    name: "MIN_POOL_RESERVE_BPS",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "MAX_PLAYER_SHARE_BPS",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
   { type: "function", name: "EMISSION_MAX_BPS", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "EMISSION_MIN_BPS", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "TVL_CAP", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
