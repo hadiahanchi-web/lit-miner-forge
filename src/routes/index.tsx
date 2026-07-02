@@ -21,6 +21,7 @@ import {
   usePendingRewards,
   usePlayer,
   usePoolInfo,
+  useWhaleShare,
 } from "@/lib/onchain";
 import { fmtBig } from "@/lib/bigformat";
 import { shortAddr } from "@/lib/format";
@@ -42,7 +43,17 @@ export default function Index() {
   const { player } = usePlayer();
   const { pending } = usePendingRewards();
   const { miners } = useMiners();
-  const { rewardPool, treasury, miningPaused, emissionBps } = usePoolInfo();
+  const {
+    rewardPool,
+    treasury,
+    availablePool,
+    reservedPool,
+    miningPaused,
+    emissionBps,
+    emissionX,
+    isLowEmission,
+  } = usePoolInfo();
+  const whale = useWhaleShare();
 
   if (!mounted) return <ConnectGate ssrPlaceholder />;
   if (!isConnected || !address) return <ConnectGate />;
@@ -52,6 +63,7 @@ export default function Index() {
   const baseRate = player?.ratePerSecond ?? 0n;
   const ratePerSec = (baseRate * emissionBps) / 10000n;
   const dailyRate = ratePerSec * 86400n;
+  const poolLocked = availablePool === 0n;
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6">
