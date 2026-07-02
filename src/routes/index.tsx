@@ -140,7 +140,12 @@ export default function Index() {
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
               <Row label="Balance" value={`${fmtBig(bal?.value ?? 0n, 4)} zkLTC`} />
               <Row label="Pending" value={fmtBig(pending, 6)} accent="orange" mono />
-              <Row label="Rate/sec" value={fmtBig(ratePerSec, 8)} accent="blue" mono />
+              <Row
+                label={`Rewards Rate · ${emissionX.toFixed(2)}x`}
+                value={fmtBig(ratePerSec, 8)}
+                accent="blue"
+                mono
+              />
               <Row label="Est. daily" value={fmtBig(dailyRate, 5)} accent="blue" mono />
               <Row label="Lifetime" value={fmtBig(player?.lifetimeRewards ?? 0n, 4)} mono />
               <Row label="Invested" value={fmtBig(player?.totalInvested ?? 0n, 3)} mono />
@@ -162,11 +167,23 @@ export default function Index() {
             </Link>
           </div>
 
+          <div className="flex flex-wrap gap-1.5 text-[10px] font-mono">
+            <Badge tone={isLowEmission ? "warn" : "ok"}>
+              {isLowEmission ? "⚠️ Low Rewards Mode" : `Emission ${emissionX.toFixed(2)}x`}
+            </Badge>
+            <Badge tone={poolLocked ? "warn" : "ok"}>
+              {poolLocked ? "⚠️ Pool Protected" : "Pool Live"}
+            </Badge>
+            {whale.isWhaleBlocked && <Badge tone="err">❌ Whale limit reached</Badge>}
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <PoolStat label="Reward Pool" value={`${fmtBig(rewardPool, 3)} zkLTC`} icon={<Coins />} />
-            <PoolStat label="Treasury" value={`${fmtBig(treasury, 3)} zkLTC`} icon={<Flame />} />
+            <PoolStat label="Available" value={`${fmtBig(availablePool, 3)} zkLTC`} icon={<Zap />} />
+            <PoolStat label="Reserved 10%" value={`${fmtBig(reservedPool, 3)} zkLTC`} icon={<Flame />} />
+            <PoolStat label="Treasury" value={`${fmtBig(treasury, 3)} zkLTC`} icon={<Wallet2 />} />
             <PoolStat
-              label="Emission"
+              label={`Emission ${emissionX.toFixed(2)}x`}
               value={`${(Number(emissionBps) / 100).toFixed(2)}%`}
               icon={<Zap />}
             />
