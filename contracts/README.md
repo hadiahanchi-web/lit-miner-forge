@@ -1,46 +1,65 @@
-# LiteMiner V3 — Multi-Contract Architecture
+# LiteMiner Contracts — LitVM LiteForge (chain 4441)
 
-Six contracts, hardened for production:
+## MiningManager.sol
 
-| Contract | Role |
-| --- | --- |
-| `v3/RewardToken.sol` | ERC20 **LFR** minted as mining rewards. |
-| `v3/TreasuryVault.sol` | Segmented native (zkLTC) vault: reward / reserve / dev. |
-| `v3/RiskEngine.sol` | Anti-bot + anti-whale scoring, per-user. |
-| `v3/EmissionOracle.sol` | Dynamic emission bps as a function of TVL + active users. |
-| `v3/V3MiningCore.sol` | UUPS upgradeable mining engine. Buys in native, rewards in LFR. |
-| `v3/V3Proxy.sol` | ERC1967 proxy wrapper (used indirectly via `deployProxy`). |
+- `registerPlayer()` — one-shot per wallet
+- `buyMiner(minerType)` — payable, must equal `miners[minerType].price`
+- `claimRewards()` — requires pending >= 10 zkLTC and pool solvency
+- `calculateRewards(address)` — view, includes live accrual
+- `getPlayer(address)` — full player struct
+- `getPoolInfo()` — reward pool / treasury / deposits / distributed
 
-Economic model: users **buy miners with native zkLTC** (forwarded to the Vault, split 10 % reserve / 10 % dev / 80 % reward pool). Claims mint **LFR** 1:1 against consumed reward-pool liquidity, backing the token with real reserves in the vault.
+Owner-only: `addMiner`, `updateMiner`, `setSplit`, `setPaused`, `withdrawTreasury`, `fundRewardPool`.
 
-## Deploy
+Events: `PlayerRegistered`, `MinerPurchased`, `RewardsClaimed`, `PoolUpdated`, `MinerAdded`, `MinerUpdated`, `SplitUpdated`, `PausedSet`.
+
+## Deploy with Hardhat
 
 ```bash
-cd contracts
-cp .env.example .env         # set DEPLOYER_PRIVATE_KEY
-bun install                  # or npm/pnpm/yarn install
-bun run compile
-bun run deploy:liteforge
+npm i -D hardhat @nomicfoundation/hardhat-toolbox
+npx hardhat init   # (choose "Create a TypeScript project", overwrite hardhat.config.ts below)
 ```
 
-The script prints five addresses. Paste them into `../src/lib/contract.ts` (or set matching `VITE_*` env vars) so the UI targets your V3 deployment.
-
-## Upgrades
-
-`V3MiningCore` is UUPS. Deploy a new implementation and call `upgradeToAndCall` from the current owner:
+Minimal `hardhat.config.ts`:
 
 ```ts
-const NewImpl = await ethers.getContractFactory("V3MiningCoreV2");
-await upgrades.upgradeProxy(coreProxyAddress, NewImpl);
+import { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox";
+
+const config: HardhatUserConfig = {
+  solidity: { version: "0.8.24", settings: { optimizer: { enabled: true, runs: 200 } } },
+  networks: {
+    liteforge: {
+      url: "https://rpc.liteforge.network",
+      chainId: 4441,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+    },
+  },
+};
+export default config;
 ```
 
-## Access wiring
+Deploy script `scripts/deploy.ts`:
 
-After deploy the script calls:
+```ts
+import { ethers } from "hardhat";
+async function main() {
+  const M = await ethers.getContractFactory("MiningManager");
+  const c = await M.deploy();
+  await c.waitForDeployment();
+  console.log("MiningManager:", await c.getAddress());
+  // Seed reward pool so early claims can succeed:
+  const tx = await c.fundRewardPool({ value: ethers.parseEther("100") });
+  await tx.wait();
+}
+main().catch((e) => { console.error(e); process.exit(1); });
+```
 
-- `RewardToken.setMinter(core)`
-- `TreasuryVault.setCore(core)`
-- `RiskEngine.setCore(core)`
-- `EmissionOracle.setCore(core)`
+```bash
+PRIVATE_KEY=0x... npx hardhat run scripts/deploy.ts --network liteforge
+```
 
-Each module also exposes `lock*` to permanently freeze that wiring once you are happy.
+Paste the deployed address into `src/lib/contract.ts` (`MINING_MANAGER_ADDRESS`).
+The frontend currently runs a local, spec-identical simulation so the UI is playable
+before deploy — swap the calls in `src/lib/mining-state.ts` for wagmi
+`useReadContract` / `useWriteContract` against the ABI in `src/lib/contract.ts`.

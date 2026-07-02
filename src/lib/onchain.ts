@@ -1,35 +1,17 @@
 import { useAccount, useReadContract, useReadContracts, useBlockNumber } from "wagmi";
 import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  CORE_ABI,
-  CORE_ADDRESS,
-  ORACLE_ABI,
-  ORACLE_ADDRESS,
-  RISK_ABI,
-  RISK_ADDRESS,
-  TOKEN_ABI,
-  TOKEN_ADDRESS,
-  TREASURY_ABI,
-  TREASURY_ADDRESS,
-} from "./contract";
+import { MINING_MANAGER_ABI, MINING_MANAGER_ADDRESS } from "./contract";
 
-const core = { address: CORE_ADDRESS, abi: CORE_ABI } as const;
-const treasury = { address: TREASURY_ADDRESS, abi: TREASURY_ABI } as const;
-const oracle = { address: ORACLE_ADDRESS, abi: ORACLE_ABI } as const;
-const token = { address: TOKEN_ADDRESS, abi: TOKEN_ABI } as const;
-const riskC = { address: RISK_ADDRESS, abi: RISK_ABI } as const;
+const contract = { address: MINING_MANAGER_ADDRESS, abi: MINING_MANAGER_ABI } as const;
 
-const ZERO = "0x0000000000000000000000000000000000000000";
-export const CONTRACT_DEPLOYED = (CORE_ADDRESS as string).toLowerCase() !== ZERO;
-
-/** True when the connected wallet is the Core owner. */
+/** True when the connected wallet is the contract owner. (v6 has no admin role.) */
 export function useIsAdmin() {
   const { address } = useAccount();
   const { data, isLoading } = useReadContract({
-    ...core,
+    ...contract,
     functionName: "owner",
-    query: { enabled: !!address && CONTRACT_DEPLOYED, refetchInterval: 8000 },
+    query: { enabled: !!address, refetchInterval: 8000 },
   });
   const owner = (data as `0x${string}` | undefined) ?? undefined;
   const isOwner = !!address && !!owner && address.toLowerCase() === owner.toLowerCase();
@@ -46,62 +28,47 @@ export function useBlockRefetch() {
   }, [block, qc]);
 }
 
-/** Aggregated pool + emission + config info across Core / Vault / Oracle. */
 export function usePoolInfo() {
   const { data, isLoading } = useReadContracts({
     contracts: [
-      { ...treasury, functionName: "rewardPool" },        // 0
-      { ...treasury, functionName: "reservePool" },       // 1
-      { ...treasury, functionName: "devPool" },           // 2
-      { ...treasury, functionName: "availableRewards" },  // 3
-      { ...treasury, functionName: "reserveBps" },        // 4
-      { ...treasury, functionName: "devBps" },            // 5
-      { ...core, functionName: "miningPaused" },          // 6
-      { ...core, functionName: "withdrawPaused" },        // 7
-      { ...core, functionName: "WITHDRAW_THRESHOLD" },    // 8
-      { ...core, functionName: "MAINTENANCE_BPS" },       // 9
-      { ...core, functionName: "MAX_PLAYER_SHARE_BPS" },  // 10
-      { ...oracle, functionName: "getEmission" },         // 11
-      { ...oracle, functionName: "base" },                // 12
-      { ...oracle, functionName: "min" },                 // 13
-      { ...oracle, functionName: "capTVL" },              // 14
-      { ...oracle, functionName: "tvl" },                 // 15
-      { ...oracle, functionName: "activeUsers" },         // 16
+      { ...contract, functionName: "rewardPool" },
+      { ...contract, functionName: "treasury" },
+      { ...contract, functionName: "miningPaused" },
+      { ...contract, functionName: "withdrawPaused" },
+      { ...contract, functionName: "WITHDRAW_THRESHOLD" },
+      { ...contract, functionName: "MAINTENANCE_BPS" },
+      { ...contract, functionName: "getEmissionBps" },
+      { ...contract, functionName: "getAvailablePool" },
+      { ...contract, functionName: "getReservedPool" },
+      { ...contract, functionName: "MIN_POOL_RESERVE_BPS" },
+      { ...contract, functionName: "MAX_PLAYER_SHARE_BPS" },
+      { ...contract, functionName: "EMISSION_MAX_BPS" },
+      { ...contract, functionName: "EMISSION_MIN_BPS" },
+      { ...contract, functionName: "TVL_CAP" },
     ],
-    query: { enabled: CONTRACT_DEPLOYED },
   });
-
-  const rewardPool = (data?.[0]?.result as bigint | undefined) ?? 0n;
-  const reservePool = (data?.[1]?.result as bigint | undefined) ?? 0n;
-  const devPool = (data?.[2]?.result as bigint | undefined) ?? 0n;
-  const availablePool = (data?.[3]?.result as bigint | undefined) ?? 0n;
-  const emissionBps = (data?.[11]?.result as bigint | undefined) ?? 10000n;
-  const emissionMax = (data?.[12]?.result as bigint | undefined) ?? 10000n;
-  const emissionMin = (data?.[13]?.result as bigint | undefined) ?? 300n;
-
+  const emissionBps = (data?.[6]?.result as bigint | undefined) ?? 10000n;
+  const emissionMax = (data?.[11]?.result as bigint | undefined) ?? 10000n;
+  const emissionMin = (data?.[12]?.result as bigint | undefined) ?? 500n;
   return {
     isLoading,
-    rewardPool,
-    reservePool,
-    reservedPool: reservePool, // alias for existing UI
-    devPool,
-    treasury: devPool,         // alias — old "treasury" number is now devPool
-    availablePool,
-    poolReserveBps: (data?.[4]?.result as bigint | undefined) ?? 1000n,
-    devBps: (data?.[5]?.result as bigint | undefined) ?? 1000n,
-    miningPaused: (data?.[6]?.result as boolean | undefined) ?? false,
-    withdrawPaused: (data?.[7]?.result as boolean | undefined) ?? false,
-    withdrawThreshold: (data?.[8]?.result as bigint | undefined) ?? 0n,
-    maintenanceBps: (data?.[9]?.result as bigint | undefined) ?? 0n,
-    maxPlayerShareBps: (data?.[10]?.result as bigint | undefined) ?? 1500n,
+    rewardPool: (data?.[0]?.result as bigint | undefined) ?? 0n,
+    treasury: (data?.[1]?.result as bigint | undefined) ?? 0n,
+    miningPaused: (data?.[2]?.result as boolean | undefined) ?? false,
+    withdrawPaused: (data?.[3]?.result as boolean | undefined) ?? false,
+    withdrawThreshold: (data?.[4]?.result as bigint | undefined) ?? 0n,
+    maintenanceBps: (data?.[5]?.result as bigint | undefined) ?? 0n,
     emissionBps,
+    availablePool: (data?.[7]?.result as bigint | undefined) ?? 0n,
+    reservedPool: (data?.[8]?.result as bigint | undefined) ?? 0n,
+    poolReserveBps: (data?.[9]?.result as bigint | undefined) ?? 1000n,
+    maxPlayerShareBps: (data?.[10]?.result as bigint | undefined) ?? 1500n,
     emissionMax,
     emissionMin,
-    tvlCap: (data?.[14]?.result as bigint | undefined) ?? 0n,
-    tvlNow: (data?.[15]?.result as bigint | undefined) ?? 0n,
-    activeUsers: (data?.[16]?.result as bigint | undefined) ?? 0n,
+    tvlCap: (data?.[13]?.result as bigint | undefined) ?? 0n,
+    // Emission "x" multiplier (relative to EMISSION_MAX = 1x)
     emissionX: emissionMax > 0n ? Number(emissionBps) / Number(emissionMax) : 1,
-    isLowEmission: emissionBps * 2n < emissionMax,
+    isLowEmission: emissionBps * 2n < emissionMax, // < 50% of max
   };
 }
 
@@ -118,14 +85,13 @@ export type OnChainMiner = {
 
 export function useMiners() {
   const { data: count } = useReadContract({
-    ...core,
+    ...contract,
     functionName: "minersCount",
-    query: { enabled: CONTRACT_DEPLOYED },
   });
   const n = Number(count ?? 0n);
   const { data, isLoading } = useReadContracts({
     contracts: Array.from({ length: n }, (_, i) => ({
-      ...core,
+      ...contract,
       functionName: "getMiner" as const,
       args: [BigInt(i)] as const,
     })),
@@ -164,10 +130,10 @@ export type OnChainPlayer = {
 export function usePlayer() {
   const { address } = useAccount();
   const { data, isLoading, refetch } = useReadContract({
-    ...core,
+    ...contract,
     functionName: "getPlayer",
     args: address ? [address] : undefined,
-    query: { enabled: !!address && CONTRACT_DEPLOYED },
+    query: { enabled: !!address },
   });
   const player: OnChainPlayer | null = useMemo(() => {
     if (!data) return null;
@@ -191,10 +157,10 @@ export function usePlayer() {
 export function usePendingRewards() {
   const { address } = useAccount();
   const { data, isLoading } = useReadContract({
-    ...core,
+    ...contract,
     functionName: "calculateRewards",
     args: address ? [address] : undefined,
-    query: { enabled: !!address && CONTRACT_DEPLOYED, refetchInterval: 4000 },
+    query: { enabled: !!address, refetchInterval: 4000 },
   });
   return { pending: (data as bigint | undefined) ?? 0n, isLoading };
 }
@@ -202,29 +168,26 @@ export function usePendingRewards() {
 export function useCooldown() {
   const { address } = useAccount();
   const { data: last } = useReadContract({
-    ...core,
+    ...contract,
     functionName: "lastAction",
     args: address ? [address] : undefined,
-    query: { enabled: !!address && CONTRACT_DEPLOYED, refetchInterval: 2000 },
+    query: { enabled: !!address, refetchInterval: 2000 },
   });
-  const { data: cd } = useReadContract({
-    ...core,
-    functionName: "COOLDOWN",
-    query: { enabled: CONTRACT_DEPLOYED },
-  });
+  const { data: cd } = useReadContract({ ...contract, functionName: "COOLDOWN" });
   return {
     lastAction: (last as bigint | undefined) ?? 0n,
     cooldown: (cd as bigint | undefined) ?? 0n,
   };
 }
 
+/** Reads global total power + player's power for anti-whale share calculation. */
 export function useWhaleShare() {
   const { address } = useAccount();
   const { player } = usePlayer();
   const { data: totalPower } = useReadContract({
-    ...core,
+    ...contract,
     functionName: "totalPower",
-    query: { enabled: !!address && CONTRACT_DEPLOYED, refetchInterval: 6000 },
+    query: { enabled: !!address, refetchInterval: 6000 },
   });
   const { maxPlayerShareBps } = usePoolInfo();
   const total = (totalPower as bigint | undefined) ?? 0n;
@@ -239,52 +202,8 @@ export function useWhaleShare() {
   };
 }
 
-/** Connected wallet's LFR balance + total supply. */
-export function useLfrBalance() {
-  const { address } = useAccount();
-  const { data } = useReadContracts({
-    contracts: [
-      {
-        ...token,
-        functionName: "balanceOf" as const,
-        args: address ? ([address] as const) : ([ZERO as `0x${string}`] as const),
-      },
-      { ...token, functionName: "totalSupply" as const },
-      { ...token, functionName: "symbol" as const },
-    ],
-    query: { enabled: !!address && CONTRACT_DEPLOYED },
-  });
-  return {
-    balance: (data?.[0]?.result as bigint | undefined) ?? 0n,
-    totalSupply: (data?.[1]?.result as bigint | undefined) ?? 0n,
-    symbol: (data?.[2]?.result as string | undefined) ?? "LFR",
-  };
-}
-
-/** Connected wallet's risk score + hard-block state. */
-export function useRiskScore() {
-  const { address } = useAccount();
-  const { data } = useReadContracts({
-    contracts: [
-      {
-        ...riskC,
-        functionName: "score" as const,
-        args: address ? ([address] as const) : ([ZERO as `0x${string}`] as const),
-      },
-      { ...riskC, functionName: "maxScore" as const },
-      {
-        ...riskC,
-        functionName: "isBlocked" as const,
-        args: address ? ([address] as const) : ([ZERO as `0x${string}`] as const),
-      },
-    ],
-    query: { enabled: !!address && CONTRACT_DEPLOYED, refetchInterval: 6000 },
-  });
-  const score = (data?.[0]?.result as bigint | undefined) ?? 0n;
-  const maxScore = (data?.[1]?.result as bigint | undefined) ?? 100n;
-  const blocked = (data?.[2]?.result as boolean | undefined) ?? false;
-  return { score, maxScore, blocked };
-}
+export const CONTRACT_DEPLOYED =
+  (MINING_MANAGER_ADDRESS as string) !== "0x0000000000000000000000000000000000000000";
 
 export type OnChainLeaderRow = {
   address: `0x${string}`;
@@ -294,17 +213,14 @@ export type OnChainLeaderRow = {
   minerCount: bigint;
 };
 
+/** Reads playerList[0..n] then getPlayer for each. */
 export function useLeaderboard() {
-  const { data: count } = useReadContract({
-    ...core,
-    functionName: "playersCount",
-    query: { enabled: CONTRACT_DEPLOYED },
-  });
+  const { data: count } = useReadContract({ ...contract, functionName: "playersCount" });
   const n = Number(count ?? 0n);
 
   const { data: addrData } = useReadContracts({
     contracts: Array.from({ length: n }, (_, i) => ({
-      ...core,
+      ...contract,
       functionName: "playerList" as const,
       args: [BigInt(i)] as const,
     })),
@@ -321,32 +237,14 @@ export function useLeaderboard() {
 
   const { data: playerData, isLoading } = useReadContracts({
     contracts: addresses.map((a) => ({
-      ...core,
+      ...contract,
       functionName: "getPlayer" as const,
       args: [a] as const,
     })),
     query: { enabled: addresses.length > 0 },
   });
 
-  // Read LFR balance + risk score for each player.
-  const { data: lfrData } = useReadContracts({
-    contracts: addresses.map((a) => ({
-      ...token,
-      functionName: "balanceOf" as const,
-      args: [a] as const,
-    })),
-    query: { enabled: addresses.length > 0 && CONTRACT_DEPLOYED },
-  });
-  const { data: riskData } = useReadContracts({
-    contracts: addresses.map((a) => ({
-      ...riskC,
-      functionName: "score" as const,
-      args: [a] as const,
-    })),
-    query: { enabled: addresses.length > 0 && CONTRACT_DEPLOYED },
-  });
-
-  const rows: (OnChainLeaderRow & { lfrBalance: bigint; risk: bigint })[] = useMemo(() => {
+  const rows: OnChainLeaderRow[] = useMemo(() => {
     if (!playerData) return [];
     return playerData.map((d, i) => {
       const r = (d.result ?? []) as unknown as readonly [
@@ -360,11 +258,9 @@ export function useLeaderboard() {
         lifetimeRewards: r?.[2] ?? 0n,
         ratePerSecond: r?.[5] ?? 0n,
         minerCount: totalMiners,
-        lfrBalance: (lfrData?.[i]?.result as bigint | undefined) ?? 0n,
-        risk: (riskData?.[i]?.result as bigint | undefined) ?? 0n,
       };
     });
-  }, [playerData, addresses, lfrData, riskData]);
+  }, [playerData, addresses]);
 
   return { rows, isLoading, playersCount: n };
 }

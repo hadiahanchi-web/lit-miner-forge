@@ -17,12 +17,10 @@ import {
 import {
   CONTRACT_DEPLOYED,
   useBlockRefetch,
-  useLfrBalance,
   useMiners,
   usePendingRewards,
   usePlayer,
   usePoolInfo,
-  useRiskScore,
   useWhaleShare,
 } from "@/lib/onchain";
 import { fmtBig } from "@/lib/bigformat";
@@ -47,7 +45,7 @@ export default function Index() {
   const { miners } = useMiners();
   const {
     rewardPool,
-    devPool,
+    treasury,
     availablePool,
     reservedPool,
     miningPaused,
@@ -55,8 +53,6 @@ export default function Index() {
     emissionX,
     isLowEmission,
   } = usePoolInfo();
-  const { balance: lfrBalance, symbol: lfrSymbol } = useLfrBalance();
-  const risk = useRiskScore();
   const whale = useWhaleShare();
 
   if (!mounted) return <ConnectGate ssrPlaceholder />;
@@ -142,18 +138,17 @@ export default function Index() {
               <div className="text-xs text-muted-foreground">active miners</div>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-              <Row label="Balance (native)" value={`${fmtBig(bal?.value ?? 0n, 4)} zkLTC`} />
-              <Row label={`Balance (${lfrSymbol})`} value={`${fmtBig(lfrBalance, 4)} ${lfrSymbol}`} accent="orange" mono />
-              <Row label={`Pending (${lfrSymbol})`} value={fmtBig(pending, 6)} accent="orange" mono />
+              <Row label="Balance" value={`${fmtBig(bal?.value ?? 0n, 4)} zkLTC`} />
+              <Row label="Pending" value={fmtBig(pending, 6)} accent="orange" mono />
               <Row
                 label={`Rewards Rate · ${emissionX.toFixed(2)}x`}
                 value={fmtBig(ratePerSec, 8)}
                 accent="blue"
                 mono
               />
-              <Row label="Est. daily (LFR)" value={fmtBig(dailyRate, 5)} accent="blue" mono />
-              <Row label={`Lifetime (${lfrSymbol})`} value={fmtBig(player?.lifetimeRewards ?? 0n, 4)} mono />
-              <Row label="Invested (native)" value={fmtBig(player?.totalInvested ?? 0n, 3)} mono />
+              <Row label="Est. daily" value={fmtBig(dailyRate, 5)} accent="blue" mono />
+              <Row label="Lifetime" value={fmtBig(player?.lifetimeRewards ?? 0n, 4)} mono />
+              <Row label="Invested" value={fmtBig(player?.totalInvested ?? 0n, 3)} mono />
             </div>
           </div>
 
@@ -180,16 +175,13 @@ export default function Index() {
               {poolLocked ? "⚠️ Pool Protected" : "Pool Live"}
             </Badge>
             {whale.isWhaleBlocked && <Badge tone="err">❌ Whale limit reached</Badge>}
-            <Badge tone={risk.blocked ? "err" : risk.score > 0n ? "warn" : "ok"}>
-              Risk {risk.score.toString()}/{risk.maxScore.toString()}
-            </Badge>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <PoolStat label="Reward Pool" value={`${fmtBig(rewardPool, 3)} zkLTC`} icon={<Coins />} />
             <PoolStat label="Available" value={`${fmtBig(availablePool, 3)} zkLTC`} icon={<Zap />} />
             <PoolStat label="Reserved 10%" value={`${fmtBig(reservedPool, 3)} zkLTC`} icon={<Flame />} />
-            <PoolStat label="Dev pool" value={`${fmtBig(devPool, 3)} zkLTC`} icon={<Wallet2 />} />
+            <PoolStat label="Treasury" value={`${fmtBig(treasury, 3)} zkLTC`} icon={<Wallet2 />} />
             <PoolStat
               label={`Emission ${emissionX.toFixed(2)}x`}
               value={`${(Number(emissionBps) / 100).toFixed(2)}%`}
