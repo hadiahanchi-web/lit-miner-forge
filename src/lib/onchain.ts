@@ -328,7 +328,7 @@ export function useLeaderboard() {
     query: { enabled: addresses.length > 0 },
   });
 
-  // Read LFR balance for each player (columns display in LFR).
+  // Read LFR balance + risk score for each player.
   const { data: lfrData } = useReadContracts({
     contracts: addresses.map((a) => ({
       ...token,
@@ -337,8 +337,16 @@ export function useLeaderboard() {
     })),
     query: { enabled: addresses.length > 0 && CONTRACT_DEPLOYED },
   });
+  const { data: riskData } = useReadContracts({
+    contracts: addresses.map((a) => ({
+      ...riskC,
+      functionName: "score" as const,
+      args: [a] as const,
+    })),
+    query: { enabled: addresses.length > 0 && CONTRACT_DEPLOYED },
+  });
 
-  const rows: (OnChainLeaderRow & { lfrBalance: bigint })[] = useMemo(() => {
+  const rows: (OnChainLeaderRow & { lfrBalance: bigint; risk: bigint })[] = useMemo(() => {
     if (!playerData) return [];
     return playerData.map((d, i) => {
       const r = (d.result ?? []) as unknown as readonly [
@@ -353,9 +361,10 @@ export function useLeaderboard() {
         ratePerSecond: r?.[5] ?? 0n,
         minerCount: totalMiners,
         lfrBalance: (lfrData?.[i]?.result as bigint | undefined) ?? 0n,
+        risk: (riskData?.[i]?.result as bigint | undefined) ?? 0n,
       };
     });
-  }, [playerData, addresses, lfrData]);
+  }, [playerData, addresses, lfrData, riskData]);
 
   return { rows, isLoading, playersCount: n };
 }
