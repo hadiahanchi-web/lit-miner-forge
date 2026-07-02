@@ -7,9 +7,10 @@ import { useBlockRefetch, useLeaderboard, CONTRACT_DEPLOYED } from "@/lib/onchai
 import { fmtBig } from "@/lib/bigformat";
 import { shortAddr } from "@/lib/format";
 
-type SortKey = "lifetimeRewards" | "totalInvested" | "ratePerSecond" | "minerCount";
+type SortKey = "lifetimeRewards" | "totalInvested" | "ratePerSecond" | "minerCount" | "lfrBalance";
 const SORT_LABEL: Record<SortKey, string> = {
-  lifetimeRewards: "Lifetime rewards",
+  lifetimeRewards: "Lifetime LFR",
+  lfrBalance: "LFR balance",
   totalInvested: "Total invested",
   ratePerSecond: "Mining power",
   minerCount: "Miner count",
@@ -76,20 +77,22 @@ export default function Leaderboard() {
               <th className="px-4 py-3 text-right">Rate/sec</th>
               <th className="px-4 py-3 text-right">Rate/day</th>
               <th className="px-4 py-3 text-right">Invested</th>
-              <th className="px-4 py-3 text-right">Lifetime</th>
+              <th className="px-4 py-3 text-right">Lifetime LFR</th>
+              <th className="px-4 py-3 text-right">LFR balance</th>
+              <th className="px-4 py-3 text-right">Risk</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin text-sky-400" />
                 </td>
               </tr>
             )}
             {!isLoading && sorted.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
                   No miners on-chain yet. Be the first to deploy a rig.
                 </td>
               </tr>
@@ -131,6 +134,22 @@ export default function Leaderboard() {
                   </td>
                   <td className="px-4 py-3 text-right font-mono neon-orange">
                     {fmtBig(r.lifetimeRewards, 4)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono neon-orange">
+                    {fmtBig(r.lfrBalance, 4)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono">
+                    <span
+                      className={
+                        r.risk >= 100n
+                          ? "text-red-300"
+                          : r.risk > 0n
+                            ? "text-yellow-300"
+                            : "text-muted-foreground"
+                      }
+                    >
+                      {r.risk.toString()}
+                    </span>
                   </td>
                 </tr>
               );

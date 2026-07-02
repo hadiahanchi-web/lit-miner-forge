@@ -17,10 +17,12 @@ import {
   CONTRACT_DEPLOYED,
   useBlockRefetch,
   useIsAdmin,
+  useLfrBalance,
   useMiners,
   usePendingRewards,
   usePlayer,
   usePoolInfo,
+  useRiskScore,
   useWhaleShare,
 } from "@/lib/onchain";
 import { fmtBig, bigMin } from "@/lib/bigformat";
@@ -37,7 +39,7 @@ export default function DashboardPage() {
   const { miners } = useMiners();
   const {
     rewardPool,
-    treasury,
+    devPool,
     availablePool,
     reservedPool,
     withdrawPaused,
@@ -48,6 +50,8 @@ export default function DashboardPage() {
     isLowEmission,
   } = usePoolInfo();
   const { isAdmin } = useIsAdmin();
+  const { balance: lfrBalance, symbol: lfrSymbol } = useLfrBalance();
+  const risk = useRiskScore();
   const whale = useWhaleShare();
 
   // Contract-derived claim math (view-only mirror of claimRewards logic)
@@ -63,6 +67,7 @@ export default function DashboardPage() {
     meetsThreshold &&
     gross > 0n &&
     !whale.isWhaleBlocked &&
+    !risk.blocked &&
     CONTRACT_DEPLOYED;
 
   const { writeContractAsync, isPending } = useWriteContract();
@@ -116,6 +121,11 @@ export default function DashboardPage() {
           label={`Pool ${poolLocked ? "Locked" : "Live"}`}
           hint={poolLocked ? "⚠️ Pool Protected" : "10% reserve intact"}
         />
+        <StatusBadge
+          tone={risk.blocked ? "err" : risk.score > 0n ? "warn" : "ok"}
+          label={`Risk ${risk.score.toString()}/${risk.maxScore.toString()}`}
+          hint={risk.blocked ? "Claims blocked" : "Normal activity"}
+        />
         {whale.isWhaleBlocked && (
           <StatusBadge tone="err" label="❌ Whale limit reached" hint="Reduce mining power" />
         )}
@@ -125,52 +135,60 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={<Wallet2 className="h-4 w-4" />} label="Wallet balance"
+        <StatCard icon={<Wallet2 className="h-4 w-4" />} label="Wallet (native)"
           value={`${fmtBig(bal?.value ?? 0n, 4)} zkLTC`} />
-        <StatCard icon={<Coins className="h-4 w-4 text-orange-400" />} label="Pending rewards"
-          value={`${fmtBig(pending, 6)} zkLTC`} accent="orange" />
+        <StatCard icon={<Coins className="h-4 w-4 text-orange-400" />} label={`Wallet (${lfrSymbol})`}
+          value={`${fmtBig(lfrBalance, 4)} ${lfrSymbol}`} accent="orange" />
+        <StatCard icon={<Coins className="h-4 w-4 text-orange-400" />} label={`Pending (${lfrSymbol})`}
+          value={`${fmtBig(pending, 6)} ${lfrSymbol}`} accent="orange" />
         <StatCard
           icon={<Zap className="h-4 w-4 text-yellow-300" />}
           label={`Rewards Rate · ${emissionX.toFixed(2)}x`}
           value={fmtBig(((player?.ratePerSecond ?? 0n) * emissionBps) / 10000n, 8)}
         />
-        <StatCard icon={<TrendingUp className="h-4 w-4 text-emerald-400" />} label="Lifetime rewards"
-          value={`${fmtBig(player?.lifetimeRewards ?? 0n, 4)} zkLTC`} />
       </section>
 
-      <section className="mt-4 grid gap-3 sm:grid-cols-3">
-        <StatCard label="Reward Pool (total)" value={`${fmtBig(rewardPool, 4)} zkLTC`} accent="blue" />
+      <section className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard icon={<TrendingUp className="h-4 w-4 text-emerald-400" />} label={`Lifetime (${lfrSymbol})`}
+          value={`${fmtBig(player?.lifetimeRewards ?? 0n, 4)} ${lfrSymbol}`} />
+        <StatCard label="Reward Pool" value={`${fmtBig(rewardPool, 4)} zkLTC`} accent="blue" />
         <StatCard label="Available Pool" value={`${fmtBig(availablePool, 4)} zkLTC`} accent="blue" />
-        <StatCard label="Reserved Pool (10%)" value={`${fmtBig(reservedPool, 4)} zkLTC`} accent="orange" />
+        <StatCard label="Reserved (10%)" value={`${fmtBig(reservedPool, 4)} zkLTC`} accent="orange" />
       </section>
 
       <section className={`mt-4 grid gap-4 ${isAdmin ? "lg:grid-cols-3" : ""}`}>
         <div className={`glass rounded-2xl p-5 ${isAdmin ? "lg:col-span-2" : ""}`}>
-          <h2 className="font-display text-lg font-semibold">Claim Rewards</h2>
+          <h2 className="font-display text-lg font-semibold">Claim Rewards ({lfrSymbol})</h2>
           <p className="text-xs text-muted-foreground">
-            Payout is capped at the Available Pool (Reward Pool − 10% reserve). A {Number(maintenanceBps) / 100}%
-            maintenance fee returns to the treasury.
+            Rewards are minted as <b>{lfrSymbol}</b>, backed 1:1 by native zkLTC locked in the vault
+            (Reward Pool − 10% reserve). A {Number(maintenanceBps) / 100}% maintenance fee is burnt from the gross.
           </p>
 
           <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-            <Row label="Pending (on-chain)" value={`${fmtBig(pending, 6)} zkLTC`} />
-            <Row label="Withdraw threshold" value={`${fmtBig(withdrawThreshold, 6)} zkLTC`} />
+            <Row label={`Pending (${lfrSymbol})`} value={`${fmtBig(pending, 6)} ${lfrSymbol}`} />
+            <Row label={`Threshold (${lfrSymbol})`} value={`${fmtBig(withdrawThreshold, 6)} ${lfrSymbol}`} />
             <Row label="Available pool" value={`${fmtBig(availablePool, 6)} zkLTC`} />
             <Row label="Maintenance fee" value={`${Number(maintenanceBps) / 100}%`} />
-            <Row label="Estimated gross" value={`${fmtBig(gross, 6)} zkLTC`} />
-            <Row label="Estimated net" value={`${fmtBig(net, 6)} zkLTC`} highlight />
+            <Row label={`Est. gross (${lfrSymbol})`} value={`${fmtBig(gross, 6)} ${lfrSymbol}`} />
+            <Row label={`Est. net (${lfrSymbol})`} value={`${fmtBig(net, 6)} ${lfrSymbol}`} highlight />
           </div>
 
           {!meetsThreshold && pending > 0n && (
             <div className="mt-3 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-200">
               <ShieldAlert className="mr-1 inline h-3.5 w-3.5" />
               Below withdraw threshold. Mine more or wait until pending ≥{" "}
-              {fmtBig(withdrawThreshold, 6)} zkLTC.
+              {fmtBig(withdrawThreshold, 6)} {lfrSymbol}.
             </div>
           )}
           {poolLocked && (
             <div className="mt-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200">
-              ⚠️ Pool Protected — the 10% reserve is intact so claims are locked. Wait for the pool to refill.
+              ⚠️ Pool Protected — the 10% native reserve is intact so mints are locked. Wait for the pool to refill.
+            </div>
+          )}
+          {risk.blocked && (
+            <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+              🤖 Risk engine blocked this address (score {risk.score.toString()}/{risk.maxScore.toString()}).
+              Slow down actions and try again later.
             </div>
           )}
           {whale.isWhaleBlocked && (
@@ -195,7 +213,7 @@ export default function DashboardPage() {
                 <Loader2 className="h-4 w-4 animate-spin" /> Confirming…
               </>
             ) : (
-              `Claim ${fmtBig(net, 5)} zkLTC`
+              `Claim ${fmtBig(net, 5)} ${lfrSymbol}`
             )}
           </button>
         </div>
@@ -207,9 +225,10 @@ export default function DashboardPage() {
               <Row label="Reward pool" value={`${fmtBig(rewardPool, 3)} zkLTC`} />
               <Row label="Available" value={`${fmtBig(availablePool, 3)} zkLTC`} />
               <Row label="Reserved (10%)" value={`${fmtBig(reservedPool, 3)} zkLTC`} />
-              <Row label="Treasury" value={`${fmtBig(treasury, 3)} zkLTC`} />
+              <Row label="Dev pool" value={`${fmtBig(devPool, 3)} zkLTC`} />
               <Row label="Emission" value={`${emissionX.toFixed(2)}x · ${(Number(emissionBps) / 100).toFixed(2)}%`} />
               <Row label="Your share" value={`${(whale.shareBps / 100).toFixed(2)}% / ${(whale.limitBps / 100).toFixed(0)}%`} />
+              <Row label="Risk score" value={`${risk.score.toString()} / ${risk.maxScore.toString()}`} />
             </div>
           </div>
         )}

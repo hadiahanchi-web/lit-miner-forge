@@ -43,7 +43,8 @@ export default function ShopPage() {
             Miner Shop
           </h1>
           <p className="text-sm text-muted-foreground">
-            All prices, rates and locks are read live from the MiningManager contract.
+            All prices, rates and locks are read live from the on-chain <b>V3MiningCore</b>.
+            You pay in <b>zkLTC</b>; mining rewards are minted as <b>LFR</b> and backed 1:1 by the vault.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
@@ -251,9 +252,10 @@ function Metric({ label, value, highlight }: { label: string; value: string; hig
 function NotDeployedBanner() {
   return (
     <div className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-100">
-      MiningManager contract address is not set. Deploy{" "}
-      <code className="font-mono">contracts/MiningManager.sol</code> and paste the address in{" "}
-      <code className="font-mono">src/lib/contract.ts</code>.
+      V3 contracts are not deployed yet. Run <code className="font-mono">contracts/scripts/deploy-v3.ts</code>
+      {" "}and paste the five addresses into <code className="font-mono">src/lib/contract.ts</code> (or set{" "}
+      <code>VITE_CORE_ADDRESS</code>, <code>VITE_TOKEN_ADDRESS</code>, <code>VITE_TREASURY_ADDRESS</code>,{" "}
+      <code>VITE_RISK_ADDRESS</code>, <code>VITE_ORACLE_ADDRESS</code>).
     </div>
   );
 }
