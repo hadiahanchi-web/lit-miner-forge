@@ -335,3 +335,5 @@ function Badge({ tone, children }: { tone: "ok" | "warn" | "err"; children: Reac
       {children}
     </span>
   );
+}
+
