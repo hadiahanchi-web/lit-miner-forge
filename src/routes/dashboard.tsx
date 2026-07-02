@@ -267,10 +267,10 @@ function StatCard({
   value,
   accent,
 }: {
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   label: string;
   value: string;
-  accent?: "orange";
+  accent?: "orange" | "blue";
 }) {
   return (
     <div className="glass rounded-2xl p-4">
@@ -278,10 +278,40 @@ function StatCard({
         {icon}
         {label}
       </div>
-      <div className={`mt-1 font-mono text-lg ${accent === "orange" ? "neon-orange" : ""}`}>
+      <div
+        className={`mt-1 font-mono text-lg ${
+          accent === "orange" ? "neon-orange" : accent === "blue" ? "neon-blue" : ""
+        }`}
+      >
         {value}
       </div>
     </div>
+  );
+}
+
+function StatusBadge({
+  tone,
+  label,
+  hint,
+}: {
+  tone: "ok" | "warn" | "err";
+  label: string;
+  hint?: string;
+}) {
+  const cls =
+    tone === "err"
+      ? "border-red-500/40 bg-red-500/10 text-red-200"
+      : tone === "warn"
+        ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-200"
+        : "border-sky-500/40 bg-sky-500/10 neon-blue";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono ${cls}`}
+      title={hint}
+    >
+      <span className="font-semibold">{label}</span>
+      {hint && <span className="opacity-70">· {hint}</span>}
+    </span>
   );
 }
 
