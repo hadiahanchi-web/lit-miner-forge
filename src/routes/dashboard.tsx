@@ -21,6 +21,7 @@ import {
   usePendingRewards,
   usePlayer,
   usePoolInfo,
+  useWhaleShare,
 } from "@/lib/onchain";
 import { fmtBig, bigMin } from "@/lib/bigformat";
 import { shortAddr } from "@/lib/format";
@@ -37,23 +38,32 @@ export default function DashboardPage() {
   const {
     rewardPool,
     treasury,
+    availablePool,
+    reservedPool,
     withdrawPaused,
     withdrawThreshold,
-    maxClaimPoolBps,
     maintenanceBps,
     emissionBps,
+    emissionX,
+    isLowEmission,
   } = usePoolInfo();
   const { isAdmin } = useIsAdmin();
+  const whale = useWhaleShare();
 
   // Contract-derived claim math (view-only mirror of claimRewards logic)
-  const poolCap = (rewardPool * maxClaimPoolBps) / 10_000n;
-  const gross = bigMin(bigMin(pending, rewardPool), poolCap);
+  const gross = bigMin(pending, availablePool);
   const fee = (gross * maintenanceBps) / 10_000n;
   const net = gross - fee;
+  const poolLocked = availablePool === 0n;
 
   const meetsThreshold = pending >= withdrawThreshold;
   const canClaim =
-    isConnected && !withdrawPaused && meetsThreshold && gross > 0n && CONTRACT_DEPLOYED;
+    isConnected &&
+    !withdrawPaused &&
+    meetsThreshold &&
+    gross > 0n &&
+    !whale.isWhaleBlocked &&
+    CONTRACT_DEPLOYED;
 
   const { writeContractAsync, isPending } = useWriteContract();
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
